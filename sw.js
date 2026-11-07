@@ -1,7 +1,7 @@
 // Service worker: fa funzionare l'app anche offline.
 // Il codice dell'app viene preso dalla rete quando possibile (così gli aggiornamenti arrivano subito)
 // e dalla copia salvata quando sei offline. Le foto e i font restano in cache.
-const VERSION = "community-v1";
+const VERSION = "community-v2";
 const MEDIA = "community-media";
 const SHELL = [
   "./",

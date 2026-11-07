@@ -24,7 +24,7 @@
   --ink:#1f1b18;
   --muted:#6b645c;
   --line:#e0dcd4;
-  --accent:#2d5c4c;
+  --accent:#a3254a;
   --accent-ink:#ffffff;
   --crema:#b9792c;
   --danger:#a23a2a;
@@ -37,13 +37,13 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --bg:#13110f; --surface:#1d1a17; --ink:#ede8e2; --muted:#a39a90; --line:#2f2a25;
-    --accent:#86bda8; --accent-ink:#0f1a16; --crema:#dba45e; --danger:#e07a68;
+    --accent:#e88aa6; --accent-ink:#2a0a14; --crema:#dba45e; --danger:#e07a68;
     color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
   --bg:#13110f; --surface:#1d1a17; --ink:#ede8e2; --muted:#a39a90; --line:#2f2a25;
-  --accent:#86bda8; --accent-ink:#0f1a16; --crema:#dba45e; --danger:#e07a68;
+  --accent:#e88aa6; --accent-ink:#2a0a14; --crema:#dba45e; --danger:#e07a68;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
@@ -236,7 +236,7 @@ textarea{min-height:110px;resize:vertical;line-height:1.45}
 const APP_TITLE = "Diario caffè";
 /* Modelli per compilare in fretta il primo macinino (l'utente può cambiare tutto). */
 const GRINDER_TEMPLATES = [
-  {key:"pietro", brand:"Bplus", model:"Pietro", burrs:"Standard", min:0, max:9.8, step:0.2},
+  {key:"pietro", brand:"",      model:"Pietro", burrs:"Standard", min:0, max:9.8, step:0.2},
   {key:"g5",     brand:"Hibrew", model:"G5",    burrs:"Standard", min:0, max:36,  step:0.25},
 ];
 const FIELDS = {
@@ -808,9 +808,9 @@ function grinderSheet(g, onSaved){
   const numField = (id, label, val, hint) => '<div class="field"><label for="'+id+'">'+label+'</label><input class="numin" type="text" inputmode="decimal" id="'+id+'" value="'+esc(val != null ? fmtNum(val) : "")+'">' + (hint ? '<p class="hint">'+hint+"</p>" : "") + "</div>";
   const inner = '<form id="gf" novalidate>' +
     (isNew ? '<div class="field"><span class="flabel">Parti da un modello (facoltativo)</span><div class="seg small" id="gf-tpl">' +
-      GRINDER_TEMPLATES.map(t => '<button type="button" data-tpl="'+t.key+'">'+esc(t.brand+" "+t.model)+"</button>").join("") + "</div></div>" : "") +
+      GRINDER_TEMPLATES.map(t => '<button type="button" data-tpl="'+t.key+'">'+esc([t.brand, t.model].filter(Boolean).join(" "))+"</button>").join("") + "</div></div>" : "") +
     '<div class="grid2">' +
-      '<div class="field"><label for="gf-brand">Marca *</label><input type="text" id="gf-brand" value="'+esc(g.brand || "")+'" placeholder="es. Comandante"></div>' +
+      '<div class="field"><label for="gf-brand">Marca</label><input type="text" id="gf-brand" value="'+esc(g.brand || "")+'" placeholder="es. Comandante"></div>' +
       '<div class="field"><label for="gf-model">Modello *</label><input type="text" id="gf-model" value="'+esc(g.model || "")+'" placeholder="es. C40 MK4"></div>' +
     "</div>" +
     '<div class="field"><span class="flabel">Macine</span><div class="seg" id="gf-burrs" role="radiogroup" aria-label="Macine">' +
@@ -860,7 +860,6 @@ function grinderSheet(g, onSaved){
     const brand = $("#gf-brand").value.trim(), model = $("#gf-model").value.trim();
     const burrs = burrsCustom ? ($("#gf-burrname").value.trim() || "") : "Standard";
     const min = numParse($("#gf-min").value), max = numParse($("#gf-max").value), step = numParse($("#gf-step").value);
-    if (!brand) return fail("Scrivi la marca.", $("#gf-brand"));
     if (!model) return fail("Scrivi il modello.", $("#gf-model"));
     if (burrsCustom && !burrs) return fail("Scrivi il nome delle macine, oppure scegli Standard.", $("#gf-burrname"));
     if (min == null) return fail("Inserisci il valore minimo.", $("#gf-min"));
