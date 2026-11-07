@@ -369,7 +369,9 @@ const brewsOf = id => S.brews.filter(b => b.coffeeId === id);
 const bagsOf = catalogId => [...S.bags.values()].filter(b => b.catalogId === catalogId);
 /* chi ha creato la scheda e gli amministratori possono modificarla */
 const canEdit = k => !!k && (k.createdBy === me() || S.isAdmin);
-const creatorName = k => !k ? "" : k.createdBy && k.createdBy === me() ? "te" : (S.profiles.get(k.createdBy) || "un membro");
+/* nickname come lo vedono gli altri: @nome */
+const nick = id => { const n = S.profiles.get(id); return n ? "@" + n : ""; };
+const creatorName = k => !k ? "" : k.createdBy && k.createdBy === me() ? "te" : (nick(k.createdBy) || "un membro");
 function ratioText(method, p){
   const out = p.yield ?? p.water; if (!p.dose || !out) return "";
   return "1:" + fmtNum(Math.round(out / p.dose * 10) / 10);
@@ -489,7 +491,7 @@ const navHtml = active => '<nav class="tabs" aria-label="Sezioni">' +
 
 function nudgesHtml(count){
   let h = "";
-  if (!myName()) h += '<div class="nudge" role="status"><span>Scegli il nome che gli altri membri vedranno accanto ai caffè che aggiungi al catalogo.</span><button class="btn" data-act="settings">Imposta</button></div>';
+  if (!myName()) h += '<div class="nudge" role="status"><span>Scegli il tuo nickname: gli altri membri lo vedranno accanto ai caffè e alle estrazioni che condividi.</span><button class="btn" data-act="settings">Imposta</button></div>';
   if (!S.grinders.size) h += '<div class="nudge" role="status"><span>Aggiungi il tuo macinino per registrare la macinatura delle estrazioni.</span><button class="btn" data-act="new-grinder">+ Macinino</button></div>';
   return h + backupNudgeHtml(count);
 }
@@ -565,7 +567,12 @@ function brewCard(b){
 
 /* ---------- Community ---------- */
 const brewCatalogId = b => b.catalogId || (S.bags.get(b.coffeeId) || {}).catalogId || null;
-const brewAuthor = b => !b.owner || b.owner === me() ? (myName() || "Tu") : (S.profiles.get(b.owner) || "Un membro");
+const isMineBrew = b => !b.owner || b.owner === me();
+/* autore di un'estrazione: il nickname, anche per le proprie (con "tu" accanto) */
+const brewAuthor = b => nick(isMineBrew(b) ? me() : b.owner) || (isMineBrew(b) ? "tu" : "un membro");
+const authorLine = b => isMineBrew(b)
+  ? (myName() ? "Condivisa da <b>" + esc(nick(me())) + "</b> (tu)" : "Condivisa da te · <span class=\"muted\">imposta un nickname in Impostazioni</span>")
+  : "Condivisa da <b>" + esc(brewAuthor(b)) + "</b>";
 function communityBrews(){
   return [...S.feed, ...S.brews.filter(b => b.public).map(b => ({...b, owner: me()}))]
     .sort((a, b) => (b.at || "").localeCompare(a.at || ""));
@@ -574,21 +581,33 @@ function communityCard(b){
   const k = S.catalog.get(brewCatalogId(b)) || {name:"Caffè"};
   return '<button class="brew" data-cbrew="'+esc(b.id)+'">' +
     '<div class="cb-head">' + thumbHtml(k.photo) + '<span class="t"><b>'+esc(k.name)+"</b>"+(k.roaster ? '<span class="small muted">'+esc(k.roaster)+"</span>" : "")+"</span></div>" +
-    brewInner(b) + '<span class="by">di '+esc(b.owner === me() ? "te" : brewAuthor(b))+"</span></button>";
+    brewInner(b) + '<span class="by">'+authorLine(b)+"</span></button>";
 }
 function renderCommunity(){
-  let list = communityBrews();
-  const f = S.communityFilter, fk = f && S.catalog.get(f);
-  if (f) list = list.filter(b => brewCatalogId(b) === f);
-  const methods = [...new Set(list.map(b => b.method))];
-  if (S.cfilter !== "all" && !methods.includes(S.cfilter)) S.cfilter = "all";
+  const all = communityBrews();
+  /* caffè con almeno un'estrazione condivisa, in ordine di nome */
+  const perCoffee = new Map();
+  for (const b of all){ const id = brewCatalogId(b); if (id) perCoffee.set(id, (perCoffee.get(id) || 0) + 1); }
+  const coffees = [...perCoffee.keys()].map(id => [id, S.catalog.get(id)]).filter(([, k]) => k)
+    .sort((a, b) => norm(a[1].name).localeCompare(norm(b[1].name)));
+  if (S.communityFilter && !perCoffee.has(S.communityFilter)) S.communityFilter = null;
+  const f = S.communityFilter;
+  const list = f ? all.filter(b => brewCatalogId(b) === f) : all;
+  const perMethod = new Map();
+  for (const b of list) perMethod.set(b.method, (perMethod.get(b.method) || 0) + 1);
+  if (S.cfilter !== "all" && !perMethod.has(S.cfilter)) S.cfilter = "all";
   const shown = S.cfilter === "all" ? list : list.filter(b => b.method === S.cfilter);
   let html = navHtml("community") + '<header class="top"><div><h1>Community</h1><p>Le estrazioni che i membri hanno scelto di condividere.</p></div></header>';
-  if (fk) html += '<div class="chips"><button class="chip" aria-pressed="true" data-act="community-all">'+esc(fk.name)+' ✕</button></div>';
-  if (methods.length > 1){
-    html += '<div class="chips" role="group" aria-label="Filtra per metodo">' +
-      '<button class="chip" data-cfilter="all" aria-pressed="'+(S.cfilter==="all")+'">Tutte</button>' +
-      methods.map(k => '<button class="chip" data-cfilter="'+esc(k)+'" aria-pressed="'+(S.cfilter===k)+'">'+esc(methodLabel(k))+"</button>").join("") + "</div>";
+  if (coffees.length){
+    html += '<div class="field"><label class="flabel" for="cm-coffee">Caffè</label><select id="cm-coffee">' +
+      '<option value="">Tutti i caffè ('+all.length+')</option>' +
+      coffees.map(([id, k]) => '<option value="'+esc(id)+'"'+(id === f ? " selected" : "")+'>'+esc(k.name + (k.roaster ? " · " + k.roaster : ""))+" ("+perCoffee.get(id)+")</option>").join("") +
+      "</select></div>";
+  }
+  if (perMethod.size > 1){
+    html += '<div class="field"><span class="flabel">Metodo</span><div class="chips" role="group" aria-label="Filtra per metodo">' +
+      '<button class="chip" data-cfilter="all" aria-pressed="'+(S.cfilter==="all")+'">Tutti ('+list.length+')</button>' +
+      [...perMethod.keys()].sort((a, b) => methodLabel(a).localeCompare(methodLabel(b))).map(k => '<button class="chip" data-cfilter="'+esc(k)+'" aria-pressed="'+(S.cfilter===k)+'">'+esc(methodLabel(k))+" ("+perMethod.get(k)+")</button>").join("") + "</div></div>";
   }
   html += '<section class="list" aria-label="Estrazioni della community">';
   html += shown.length ? shown.map(communityCard).join("")
@@ -596,6 +615,9 @@ function renderCommunity(){
   html += "</section>" + footerHtml();
   app.innerHTML = html;
 }
+app.addEventListener("change", e => {
+  if (e.target.id === "cm-coffee"){ S.communityFilter = e.target.value || null; S.cfilter = "all"; render(); }
+});
 function communityBrewSheet(b){
   const k = S.catalog.get(brewCatalogId(b));
   const mine = b.owner === me();
@@ -603,12 +625,12 @@ function communityBrewSheet(b){
   const inner = (k ? '<div class="card mini static">' + thumbHtml(k.photo) + '<div class="t"><span class="name">'+esc(k.name)+"</span>" +
       (k.roaster ? '<span class="sub">'+esc(k.roaster)+"</span>" : "") +
       ([k.origin, k.process].filter(Boolean).length ? '<span class="sub">'+[k.origin, k.process].filter(Boolean).map(esc).join(" · ")+"</span>" : "") + "</div></div>" : "") +
-    '<div class="brew" style="cursor:default">' + brewInner(b) + '<span class="by">di '+esc(mine ? "te" : brewAuthor(b))+"</span></div>" +
+    '<div class="brew" style="cursor:default">' + brewInner(b) + '<span class="by">'+authorLine(b)+"</span></div>" +
     '<div class="actions"><button type="button" class="btn primary" data-x="share">Condividi come immagine</button>' +
     (mine ? '<button type="button" class="btn" data-x="edit">Modifica</button>' : "") +
     (k && myBag ? '<button type="button" class="btn" data-x="open">Apri nella mia dispensa</button>' : k ? '<button type="button" class="btn" data-x="add">Aggiungi alla dispensa</button>' : "") +
     "</div>";
-  const s = openSheet("Estrazione di " + (mine ? "te" : brewAuthor(b)), inner);
+  const s = openSheet(mine ? "La tua estrazione" : "Estrazione di " + brewAuthor(b), inner);
   s.el.querySelector(".actions").addEventListener("click", e => {
     const x = e.target.closest("[data-x]"); if (!x) return;
     const a = x.dataset.x;
@@ -1049,8 +1071,8 @@ function settingsSheet(){
     const saved = savedDefaults();
     const savedKeys = Object.keys(saved).filter(k => METHODS[k] && saved[k]);
     box.innerHTML =
-      '<section class="sec"><h3>Il tuo nome</h3><p class="hint">Gli altri membri lo vedono accanto ai caffè che aggiungi al catalogo.' + (S.isAdmin ? " Sei amministratore: puoi modificare ed eliminare tutte le schede del catalogo, anche quelle create da altri." : "") + '</p>' +
-        '<form id="st-name" class="grid2" style="grid-template-columns:1fr auto;align-items:end" novalidate><div class="field"><label for="st-name-in" class="sr">Nome</label><input type="text" id="st-name-in" maxlength="40" value="'+esc(myName())+'" placeholder="es. Alessio"></div>' +
+      '<section class="sec"><h3>Il tuo nickname</h3><p class="hint">Gli altri membri lo vedono accanto ai caffè che aggiungi al catalogo e alle estrazioni che condividi.' + (S.isAdmin ? " Sei amministratore: puoi modificare ed eliminare tutte le schede del catalogo, anche quelle create da altri." : "") + '</p>' +
+        '<form id="st-name" class="grid2" style="grid-template-columns:1fr auto;align-items:end" novalidate><div class="field"><label for="st-name-in" class="sr">Nickname</label><input type="text" id="st-name-in" maxlength="40" value="'+esc(myName())+'" placeholder="es. alessio_espresso"></div>' +
         '<button class="btn primary" type="submit">Salva</button></form></section>' +
       '<section class="sec"><div class="sec-head"><h3>Macinini</h3><button class="btn small" type="button" data-g="new">+ Macinino</button></div>' +
         (S.grinders.size ? grinderList().map(g => '<button class="item" type="button" data-g="'+esc(g.id)+'"><span class="t"><b>'+esc(grinderLabel(g))+'</b><span class="small muted num">'+fmtNum(g.min)+" – "+fmtNum(g.max)+" · step "+fmtNum(g.step)+"</span></span>"+(g.id === defId ? '<span class="pill fresh">predefinito</span>' : "")+"</button>").join("")
@@ -1065,11 +1087,11 @@ function settingsSheet(){
           : '<p class="hint">Tutti i metodi usano i valori di partenza dell\'app.</p>') + "</section>";
     box.querySelector("#st-name").addEventListener("submit", async e => {
       e.preventDefault();
-      const name = box.querySelector("#st-name-in").value.trim().slice(0, 40);
+      const name = box.querySelector("#st-name-in").value.trim().replace(/^@+/, "").trim().slice(0, 40);
       try {
         const {error} = await sb.from("profiles").upsert({id: me(), name, updated_at: new Date().toISOString()});
         if (error) throw wrapErr(error);
-        S.profiles.set(me(), name); saveCache(); render(); toast("Nome salvato");
+        S.profiles.set(me(), name); saveCache(); render(); toast("Nickname salvato");
       } catch(err){ toast(errMsg(err)); }
     });
   };
@@ -1438,7 +1460,7 @@ async function brewImage(b){
   }
   /* piede */
   x.fillStyle = C.muted; x.font = "500 28px " + BODY;
-  x.fillText("di " + brewAuthor(b), M, footY);
+  x.fillText("di " + (nick(isMineBrew(b) ? me() : b.owner) || "un membro della community"), M, footY);
   if (k.tasting){ x.textAlign = "right"; x.font = "400 24px " + BODY; x.fillText(wrapLines(x, "In busta: " + k.tasting, W / 2, 1)[0], W - M, footY); x.textAlign = "left"; }
   return new Promise((res, rej) => cv.toBlob(bl => bl ? res(bl) : rej(new Error("toBlob")), "image/png"));
 }
@@ -1714,7 +1736,7 @@ async function recordBackup(){
 }
 function footerHtml(){
   return '<footer class="foot"><button class="btn" data-act="settings">Impostazioni</button><button class="btn" data-act="export">Esporta backup</button><button class="btn" data-act="import">Importa backup</button><button class="btn" data-act="logout">Esci</button>' +
-    (session ? '<span class="who">Accesso come ' + esc(session.user.email || "") + (myName() ? " (" + esc(myName()) + ")" : "") + (lastBackup() ? " · ultimo backup " + fmtDate(lastBackup()) : "") + "</span>" : "") + "</footer>";
+    (session ? '<span class="who">Accesso come ' + esc(session.user.email || "") + (myName() ? " (" + esc(nick(me())) + ")" : "") + (lastBackup() ? " · ultimo backup " + fmtDate(lastBackup()) : "") + "</span>" : "") + "</footer>";
 }
 const blobToDataURL = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
 async function withPhotoData(o){
