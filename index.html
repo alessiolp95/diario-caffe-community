@@ -1,0 +1,1522 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Caffè Community">
+<meta name="theme-color" content="#f2f1ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#13110f" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<title>Diario caffè · Community</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: one narrow mobile column; library → coffee detail → bottom-sheet forms. */
+:root{
+  --bg:#f2f1ec;
+  --surface:#ffffff;
+  --ink:#1f1b18;
+  --muted:#6b645c;
+  --line:#e0dcd4;
+  --accent:#2d5c4c;
+  --accent-ink:#ffffff;
+  --crema:#b9792c;
+  --danger:#a23a2a;
+  --font-display:"Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --font-body:"IBM Plex Sans", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --radius:14px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#13110f; --surface:#1d1a17; --ink:#ede8e2; --muted:#a39a90; --line:#2f2a25;
+    --accent:#86bda8; --accent-ink:#0f1a16; --crema:#dba45e; --danger:#e07a68;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#13110f; --surface:#1d1a17; --ink:#ede8e2; --muted:#a39a90; --line:#2f2a25;
+  --accent:#86bda8; --accent-ink:#0f1a16; --crema:#dba45e; --danger:#e07a68;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;overflow-x:hidden;overscroll-behavior-x:none;max-width:100%}
+html{-webkit-text-size-adjust:100%}
+img,input,select,textarea,button{max-width:100%}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--font-body); font-size:16px; line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:640px;margin:0 auto;padding:20px 16px 96px;display:flex;flex-direction:column;gap:20px;overflow-x:hidden}
+.wrap > *, .sheet > *, form > *{min-width:0}
+h1,h2,h3{font-family:var(--font-display);text-wrap:balance;margin:0;letter-spacing:-0.01em}
+h1{font-size:30px;font-weight:700;line-height:1.1}
+h2{font-size:20px;font-weight:700}
+h3{font-size:17px;font-weight:600}
+.num{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+
+/* header */
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}
+.top p{margin:4px 0 0;color:var(--muted);font-size:14px}
+
+/* buttons */
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:9px 16px;font-weight:500;font-size:15px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--danger);border-color:transparent;background:transparent;padding-left:0}
+.btn.ghost{background:transparent;border-color:transparent;padding-left:0}
+.btn:disabled{opacity:.5;cursor:default}
+
+/* library cards */
+.list{display:flex;flex-direction:column;gap:10px}
+.card{display:grid;grid-template-columns:76px 1fr;gap:14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:10px;cursor:pointer;text-align:left;width:100%}
+.card:hover{border-color:var(--muted)}
+.thumb{width:76px;height:76px;border-radius:10px;object-fit:cover;background:var(--bg);display:block}
+.thumb.ph{display:grid;place-items:center;color:var(--muted)}
+.card .t{display:flex;flex-direction:column;gap:2px;min-width:0}
+.card .name{font-weight:600;font-size:16px;overflow-wrap:anywhere}
+.card .sub{color:var(--muted);font-size:14px}
+.card .meta{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:2px}
+.card.done{opacity:.7}
+.pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--bg);border:1px solid var(--line);color:var(--muted)}
+.pill.fresh{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+details.finished summary{cursor:pointer;color:var(--muted);font-weight:500;padding:6px 0;list-style:none}
+details.finished summary::-webkit-details-marker{display:none}
+details.finished summary::before{content:"▸ ";display:inline-block;width:1em}
+details.finished[open] summary::before{content:"▾ "}
+details.finished .list{margin-top:8px}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--radius);padding:24px;text-align:center;color:var(--muted)}
+.empty p{margin:0 0 12px}
+
+/* detail */
+.back{align-self:flex-start}
+.hero{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.hero img{width:100%;max-height:360px;object-fit:contain;display:block;background:var(--bg)}
+.hero .body{padding:16px;display:flex;flex-direction:column;gap:12px}
+.hero .roaster{color:var(--muted);margin-top:2px}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px 16px;margin:0}
+.facts div{display:flex;flex-direction:column}
+.facts dt{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.facts dd{margin:0;font-weight:500}
+.tasting{margin:0;font-style:italic}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.status{font-size:13px;font-weight:600;color:var(--muted)}
+
+.sec-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font-size:14px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+
+.brew{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:8px;cursor:pointer;text-align:left;width:100%}
+.brew:hover{border-color:var(--muted);border-left-color:var(--accent)}
+.brew .row{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.brew .method{font-weight:600}
+.brew .when{font-size:13px;color:var(--muted)}
+.params{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px}
+.params span b{font-weight:500}
+.params .lbl{color:var(--muted);font-family:var(--font-body);font-size:12px;margin-right:4px}
+.brew .notes{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.stars{color:var(--crema);letter-spacing:1px;font-size:15px}
+.stars .off{color:var(--line)}
+
+/* sheet */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.sheet{background:var(--bg);width:100%;max-width:640px;max-height:92%;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;touch-action:pan-y;border-radius:18px 18px 0 0;padding:18px 16px calc(24px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:16px;-webkit-overflow-scrolling:touch}
+@media (min-width:700px){.overlay{align-items:center}.sheet{border-radius:18px;max-height:88%}}
+.sheet-head{display:flex;justify-content:space-between;align-items:center;gap:8px;position:sticky;top:-18px;background:var(--bg);padding:6px 0;z-index:1}
+form{display:flex;flex-direction:column;gap:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:380px){.grid2{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field.full{grid-column:1/-1}
+.field label{font-size:13px;font-weight:500;color:var(--muted)}
+.field .unitwrap{position:relative;display:flex}
+.field .unit{position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;pointer-events:none}
+input[type=date],input[type=datetime-local]{-webkit-appearance:none;appearance:none;display:block;min-width:0;text-align:left}
+input[type=date]::-webkit-date-and-time-value,input[type=datetime-local]::-webkit-date-and-time-value{text-align:left}
+input[type=text],input[type=search],input[type=password],input[type=date],input[type=datetime-local],select,textarea{
+  width:100%;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:16px;min-height:44px;
+}
+input.numin{font-family:var(--font-mono);padding-right:44px}
+textarea{min-height:110px;resize:vertical;line-height:1.45}
+.hint{font-size:12px;color:var(--muted);margin:0}
+.flabel{font-size:13px;font-weight:500;color:var(--muted)}
+.controls{display:flex;flex-direction:column;gap:12px}
+.sl{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;gap:8px}
+.sl-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.sl-head label{font-size:14px;color:var(--ink);font-weight:500}
+.sl-head output{font-size:18px;font-weight:500}
+.sl-row{display:grid;grid-template-columns:40px 1fr 40px;gap:10px;align-items:center}
+.sl-row input[type=range]{width:100%;min-width:0;touch-action:pan-y;accent-color:var(--accent);height:32px;margin:0}
+.step{width:40px;height:40px;border-radius:50%;border:1px solid var(--line);background:var(--bg);font-size:20px;line-height:1;cursor:pointer;touch-action:manipulation}
+.step:active{background:var(--line)}
+.scale{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);font-family:var(--font-mono);padding:0 50px}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{flex:1 1 auto;min-height:40px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:6px 12px;font-size:15px;cursor:pointer;touch-action:manipulation}
+.seg button[aria-checked="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:500}
+.seg.small button{min-height:34px;font-size:14px;padding:4px 10px}
+.sl .seg.small button{background:var(--bg)}
+.sl .seg.small button[aria-checked="true"]{background:var(--accent)}
+.declared{background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--crema);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.declared p{margin:0;font-style:italic}
+.prefill{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.prefill:empty{display:none}
+.btn.small{padding:6px 12px;font-size:14px}
+.rating{display:flex;gap:6px}
+.rating button{width:40px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:20px;color:var(--line);cursor:pointer}
+.rating button.on{color:var(--crema);border-color:color-mix(in srgb,var(--crema) 50%,var(--line))}
+.photo-pick{border:1px dashed var(--line);border-radius:var(--radius);background:var(--surface);min-height:120px;display:grid;place-items:center;cursor:pointer;overflow:hidden;position:relative;color:var(--muted);text-align:center;padding:0}
+.photo-pick img{width:100%;max-height:240px;object-fit:contain;display:block}
+.photo-pick input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.form-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.calc{font-size:14px;color:var(--muted)}
+.calc b{color:var(--ink);font-weight:500}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;z-index:40;max-width:90%}
+.confirm .sheet{gap:12px}
+.foot{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding-top:16px;border-top:1px solid var(--line)}
+.foot .who{width:100%;text-align:center;font-size:13px;color:var(--muted)}
+.login{display:flex;flex-direction:column;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+.login .err{color:var(--danger);margin:0;font-size:14px}
+.nudge{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--crema);border-radius:12px;padding:10px 12px;font-size:14px}
+.nudge .btn{padding:6px 12px;font-size:14px}
+.offline{font-size:13px;color:var(--crema);font-weight:500}
+.notice{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+.notice p{margin:0}
+.card.static{cursor:default}
+.card.static:hover{border-color:var(--line)}
+.card.mini{grid-template-columns:56px 1fr;gap:12px;padding:8px}
+.card.mini .thumb{width:56px;height:56px}
+.card .by{font-size:12px;color:var(--muted)}
+.item{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;width:100%;text-align:left;cursor:pointer}
+.item:hover{border-color:var(--muted)}
+.item .t{display:flex;flex-direction:column;gap:2px;min-width:0}
+.item .t b{font-weight:600;overflow-wrap:anywhere}
+.item.static{cursor:default}
+.item.static:hover{border-color:var(--line)}
+.sec{display:flex;flex-direction:column;gap:10px}
+.sec + .sec{padding-top:6px;border-top:1px solid var(--line)}
+.dupes{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--crema);border-radius:12px;padding:10px 12px}
+.dupes:empty{display:none}
+.byline{font-size:13px;color:var(--muted);margin:0}
+.ok{color:var(--accent);margin:0;font-size:14px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media (prefers-reduced-motion:no-preference){
+  .sheet{animation:up .18s ease-out}
+  @keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
+}
+</style>
+</head>
+<body>
+<main class="wrap" id="app">
+  <header class="top">
+    <div><h1>Diario caffè</h1><p>Caricamento dell'archivio…</p></div>
+  </header>
+</main>
+
+<script src="config.js"></script>
+<script src="vendor/supabase-2.117.3.js"></script>
+<script>
+(() => {
+"use strict";
+
+/* ---------- configurazione ---------- */
+const APP_TITLE = "Diario caffè";
+/* Modelli per compilare in fretta il primo macinino (l'utente può cambiare tutto). */
+const GRINDER_TEMPLATES = [
+  {key:"pietro", brand:"Bplus", model:"Pietro", burrs:"Standard", min:0, max:9.8, step:0.2},
+  {key:"g5",     brand:"Hibrew", model:"G5",    burrs:"Standard", min:0, max:36,  step:0.25},
+];
+const FIELDS = {
+  dripper:    {label:"Dripper", type:"choice", options:["V60","Origami","Kalita","Orea"]},
+  paper:      {label:"Filtro", type:"choice", options:["Abaca+","T90","T92","Hario"]},
+  dose:       {label:"Dose", unit:"g", type:"slider", min:5, max:35, step:0.1, slideStep:1},
+  yield:      {label:"Resa in tazza", unit:"g", type:"slider", min:10, max:120, step:0.5},
+  water:      {label:"Acqua", unit:"g", type:"slider", min:20, max:500, step:1},
+  bypass:     {label:"di cui bypass", unit:"g", type:"slider", min:0, max:200, step:1},
+  temp:       {label:"Temperatura", unit:"°C", type:"slider", min:70, max:100, step:1},
+  grind:      {label:"Macinatura", type:"grind"},
+  tamp:       {label:"Pressatura", type:"bool"},
+  paperFilter:{label:"Filtro di carta", type:"bool"},
+  bloomWater: {label:"Acqua bloom", unit:"g", type:"slider", min:0, max:150, step:1},
+  bloomTime:  {label:"Tempo bloom", type:"slider", dur:true, min:0, max:120, step:5},
+  pours:      {label:"N. versate", type:"slider", min:1, max:8, step:1},
+  time:       {label:"Tempo di estrazione", type:"slider", dur:true, min:0, max:420, step:5},
+  /* solo per mostrare estrazioni importate da versioni precedenti */
+  preinf:     {label:"Preinfusione", dur:true},
+  steep:      {label:"Infusione", dur:true},
+  waterStart: {label:"Acqua in caldaia"},
+  heat:       {label:"Fiamma"},
+  pressure:   {label:"Pressione", unit:"bar"},
+  orientation:{label:"Posizione"},
+  filter:     {label:"Filtro"},
+  hours:      {label:"Infusione", unit:"ore"},
+  device:     {label:"Attrezzo"},
+};
+const DISPLAY_ORDER = ["dose","yield","water","bypass","temp","grind","tamp","paperFilter","paper","bloomWater","bloomTime","pours","time","preinf","steep","waterStart","heat","pressure","orientation","filter","hours"];
+const METHODS = {
+  espressoClassico: {label:"Espresso classico", fields:["dose","yield","temp","grind"],
+    defaults:{dose:18, yield:36, temp:95}, ratio:2},
+  espressoModerno:  {label:"Espresso moderno", fields:["dose","yield","temp","grind","tamp","paperFilter"],
+    defaults:{dose:20, yield:48, temp:95, tamp:true, paperFilter:true}, ratio:2.4},
+  espressoLungo:    {label:"Espresso moderno lungo", fields:["dose","yield","temp","grind","tamp","paperFilter"],
+    defaults:{dose:17, yield:80, temp:90, tamp:false, paperFilter:true}, ratio:4.7},
+  aeropress:        {label:"AeroPress", fields:["dose","water","bypass","temp","grind","time"],
+    defaults:{dose:18, water:270, bypass:0, temp:90, time:0}, ratio:15},
+  filtro:           {label:"Filtro", fields:["dripper","paper","dose","water","temp","grind","bloomWater","bloomTime","pours","time"],
+    defaults:{dripper:"V60", dose:18, water:270, temp:90, bloomTime:30, pours:1, time:0}, ratio:15, bloomAuto:3},
+  moka:             {label:"Moka 1 tazza", fields:["dose","water","grind"],
+    defaults:{dose:7, water:70}, ratio:10},
+  mokapump:         {label:"Moka Pump 3 tazze", fields:["dose","water","temp","grind"],
+    defaults:{dose:17, water:170, temp:85}, ratio:10},
+};
+const LEGACY_METHODS = {espresso:"Espresso", french:"French press", coldbrew:"Cold brew", altro:"Altro"};
+const methodLabel = k => METHODS[k]?.label || LEGACY_METHODS[k] || k;
+const PROCESSES = ["Lavato","Naturale","Honey","Anaerobico","Macerazione carbonica","Semi-lavato","Wet hulled"];
+const CATALOG_FIELDS = ["name","roaster","origin","variety","process","profile","tasting","photo"];
+const BAG_FIELDS = ["roastDate","weight","price","finished","finishedAt"];
+
+/* ---------- stato ---------- */
+let db = null, assets = null;
+const S = {
+  catalog:new Map(), bags:new Map(), brews:[], grinders:new Map(), profiles:new Map(), counts:new Map(),
+  loaded:false, error:null, slow:false, filter:"all",
+};
+const app = document.getElementById("app");
+
+/* ---------- utilità ---------- */
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+const numParse = v => { if (v == null) return null; const s = String(v).trim().replace(",", "."); if (s === "") return null; const n = Number(s); return Number.isFinite(n) ? n : null; };
+const fmtNum = n => n == null ? "" : (Math.round(n*1000)/1000).toLocaleString("it-IT", {maximumFractionDigits:3});
+const durFmt = n => { if (n == null) return ""; if (n < 60) return n + " s"; const m = Math.floor(n/60), s = n % 60; return m + ":" + String(s).padStart(2,"0"); };
+const dayMs = 864e5;
+const fmtDate = iso => { if (!iso) return ""; const d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString("it-IT", {day:"numeric", month:"short", year:"numeric"}); };
+const fmtWhen = iso => { const d = new Date(iso); if (isNaN(d)) return ""; return d.toLocaleDateString("it-IT",{weekday:"short", day:"numeric", month:"short"}) + " · " + d.toLocaleTimeString("it-IT",{hour:"2-digit", minute:"2-digit"}); };
+const daysBetween = (a, b) => { const d1 = new Date(a), d2 = new Date(b); if (isNaN(d1)||isNaN(d2)) return null; return Math.floor((Date.UTC(d2.getFullYear(),d2.getMonth(),d2.getDate()) - Date.UTC(d1.getFullYear(),d1.getMonth(),d1.getDate()))/dayMs); };
+const ago = iso => { const n = daysBetween(iso, new Date()); if (n == null) return ""; if (n <= 0) return "oggi"; if (n === 1) return "ieri"; return n + " gg fa"; };
+const localDT = (d = new Date()) => { const p = x => String(x).padStart(2,"0"); return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes()); };
+const norm = s => String(s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+const CFG = window.DIARIO_CONFIG || {};
+const photoUrl = path => String(CFG.supabaseUrl || "").replace(/\/$/, "") + "/storage/v1/object/public/photos/" + String(path).split("/").map(encodeURIComponent).join("/");
+const stars = r => { r = r || 0; if (!r) return ""; let s = ""; for (let i=1;i<=5;i++) s += i <= r ? "★" : '<span class="off">★</span>'; return '<span class="stars" aria-label="Voto '+r+' su 5">'+s+"</span>"; };
+const beanSvg = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><ellipse cx="12" cy="12" rx="6.5" ry="9" transform="rotate(35 12 12)"/><path d="M8.5 5.5c3 3 1 6.5 3.5 9s4 3 3.5 4"/></svg>';
+const pick = (o, keys) => { const r = {}; for (const k of keys) if (o[k] !== undefined) r[k] = o[k]; return r; };
+
+function toast(msg){
+  const t = document.createElement("div"); t.className = "toast"; t.setAttribute("role","status"); t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3600);
+}
+function errMsg(e){
+  const c = e && e.code;
+  if (c === "in_use") return "Questo caffè è nella dispensa di altri membri: non si può eliminare dal catalogo.";
+  if (c === "too_large") return "La foto è troppo grande.";
+  if (c === "invalid_argument") return "Non hai i permessi per questa modifica.";
+  return "Salvataggio non riuscito. Controlla la connessione e riprova.";
+}
+async function retryOnce(fn){
+  try { return await fn(); }
+  catch(e){ if (e && e.code === "unavailable") { await new Promise(r => setTimeout(r, 600 + Math.random()*600)); return fn(); } throw e; }
+}
+
+/* ---------- account ---------- */
+let sb = null, session = null;
+const me = () => (session && session.user && session.user.id) || null;
+const meta = () => (session && session.user && session.user.user_metadata) || {};
+const savedDefaults = () => meta().methodDefaults || {};
+const myName = () => S.profiles.get(me()) || "";
+async function setMeta(patch){
+  const {data, error} = await sb.auth.updateUser({data: patch});
+  if (error) throw wrapErr(error);
+  if (data && data.user && session) session = {...session, user: data.user};
+  if (session && session.user) session.user.user_metadata = {...(session.user.user_metadata || {}), ...patch};
+}
+
+/* ---------- derivati ---------- */
+/* Una "confezione" della dispensa unita alla sua scheda del catalogo. */
+function view(bag){
+  const k = S.catalog.get(bag.catalogId) || {name:"Scheda non disponibile"};
+  return {...k, ...bag, id: bag.id, catalogId: bag.catalogId, createdBy: k.createdBy};
+}
+const brewsOf = id => S.brews.filter(b => b.coffeeId === id);
+const bagsOf = catalogId => [...S.bags.values()].filter(b => b.catalogId === catalogId);
+const creatorName = k => !k ? "" : k.createdBy && k.createdBy === me() ? "te" : (S.profiles.get(k.createdBy) || "un membro");
+function ratioText(method, p){
+  const out = p.yield ?? p.water; if (!p.dose || !out) return "";
+  return "1:" + fmtNum(Math.round(out / p.dose * 10) / 10);
+}
+
+/* ---------- macinini ---------- */
+const grinderLabel = g => g ? [g.brand, g.model].filter(Boolean).join(" ") + (g.burrs && g.burrs !== "Standard" ? " · " + g.burrs : "") : "";
+const grinderList = () => [...S.grinders.values()].sort((a,b) => (a.createdAt||"").localeCompare(b.createdAt||""));
+function defaultGrinderId(){
+  const d = meta().defaultGrinder; if (d && S.grinders.has(d)) return d;
+  const l = grinderList(); return l.length ? l[0].id : null;
+}
+const snap = (v, min, max, step) => { const n = Math.round((Math.min(max, Math.max(min, v)) - min) / step) * step + min; return Math.round(n * 10000) / 10000; };
+function grindRange(id, value){
+  const g = S.grinders.get(id);
+  if (g) return {min:g.min, max:g.max, step:g.step};
+  return {min:0, max:Math.max(10, Math.ceil(value || 0)), step:0.1};
+}
+function convertGrind(from, toId){
+  const F = grindRange(from.grinder, from.value), G = grindRange(toId);
+  const frac = (from.value - F.min) / ((F.max - F.min) || 1);
+  return snap(G.min + frac * (G.max - G.min), G.min, G.max, G.step);
+}
+function defaultGrind(method, gid, from){
+  const saved = savedDefaults()[method], G = grindRange(gid);
+  if (saved && saved.grinder === gid && saved.grind != null) return snap(saved.grind, G.min, G.max, G.step);
+  const last = S.brews.find(b => b.method === method && b.params && b.params.grinder === gid && b.params.grind != null);
+  if (last) return snap(last.params.grind, G.min, G.max, G.step);
+  if (from && from.value != null) return convertGrind(from, gid);
+  return snap((G.min + G.max) / 2, G.min, G.max, G.step);
+}
+function methodDefaults(method){
+  const m = METHODS[method], saved = savedDefaults()[method];
+  const v = {...m.defaults, ...(saved || {})};
+  delete v.grinderLabel;
+  const gid = saved && saved.grinder && S.grinders.has(saved.grinder) ? saved.grinder : defaultGrinderId();
+  if (gid){ v.grinder = gid; v.grind = defaultGrind(method, gid); } else { delete v.grinder; delete v.grind; }
+  if (m.bloomAuto && !(saved && saved.bloomWater != null)) v.bloomWater = Math.round(v.dose * m.bloomAuto);
+  return v;
+}
+function methodRatio(method){
+  const saved = savedDefaults()[method];
+  if (saved && saved.dose){ const out = saved.yield ?? saved.water; if (out) return Math.round(out / saved.dose * 10) / 10; }
+  return METHODS[method]?.ratio;
+}
+
+/* ---------- routing ---------- */
+function currentId(){ const h = location.hash.slice(1); return h.startsWith("c-") ? h.slice(2) : null; }
+function go(id){ location.hash = id ? "c-" + id : ""; if (!id) history.replaceState(null, "", location.pathname + location.search); render(); }
+window.addEventListener("hashchange", render);
+
+/* ---------- render ---------- */
+function render(){
+  if (S.needPassword){ renderSetPassword(); return; }
+  if (S.needLogin){ renderLogin(); return; }
+  if (!db){
+    app.innerHTML = '<header class="top"><div><h1>'+APP_TITLE+'</h1></div></header>' +
+      '<div class="notice"><p>' + esc(S.error || "Caricamento dell'archivio…") + "</p></div>";
+    return;
+  }
+  if (!S.loaded){
+    app.innerHTML = '<header class="top"><div><h1>'+APP_TITLE+'</h1><p>' +
+      (S.error ? esc(S.error) : S.slow ? "L'archivio non risponde ancora. Controlla la connessione: i dati compariranno appena raggiungibili." : "Caricamento dell'archivio…") +
+      "</p></div></header>";
+    return;
+  }
+  const id = currentId();
+  if (id && S.bags.has(id)) renderDetail(view(S.bags.get(id)));
+  else renderLibrary();
+}
+
+const thumbHtml = (photo, cls) => photo
+  ? '<img class="thumb" src="'+photoUrl(photo)+'" alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'">'
+  : '<div class="thumb ph">'+beanSvg+"</div>";
+
+function coffeeCard(c){
+  const bs = brewsOf(c.id);
+  const last = bs[0];
+  const rd = c.roastDate ? daysBetween(c.roastDate, new Date()) : null;
+  const origin = [c.origin, c.process].filter(Boolean).map(esc).join(" · ");
+  let meta = [];
+  if (!c.finished && rd != null && rd >= 0) meta.push('<span class="pill'+(rd>=7 && rd<=35 ? " fresh":"")+'">'+rd+" gg dalla tostatura</span>");
+  if (c.finished && c.finishedAt) meta.push("<span>Finito il " + fmtDate(c.finishedAt) + "</span>");
+  meta.push("<span>" + bs.length + (bs.length === 1 ? " estrazione" : " estrazioni") + "</span>");
+  if (last) meta.push("<span>ultima: " + esc(methodLabel(last.method)) + ", " + ago(last.at) + "</span>");
+  return '<button class="card'+(c.finished?" done":"")+'" data-open="'+esc(c.id)+'">' + thumbHtml(c.photo) +
+    '<div class="t"><span class="name">'+esc(c.name)+"</span>" +
+    (c.roaster ? '<span class="sub">'+esc(c.roaster)+"</span>" : "") +
+    (origin ? '<span class="sub">'+origin+"</span>" : "") +
+    '<span class="meta">'+meta.join("")+"</span></div></button>";
+}
+
+function nudgesHtml(count){
+  let h = "";
+  if (!myName()) h += '<div class="nudge" role="status"><span>Scegli il nome che gli altri membri vedranno accanto ai caffè che aggiungi al catalogo.</span><button class="btn" data-act="settings">Imposta</button></div>';
+  if (!S.grinders.size) h += '<div class="nudge" role="status"><span>Aggiungi il tuo macinino per registrare la macinatura delle estrazioni.</span><button class="btn" data-act="new-grinder">+ Macinino</button></div>';
+  return h + backupNudgeHtml(count);
+}
+
+function renderLibrary(){
+  const all = [...S.bags.values()].map(view);
+  const active = all.filter(c => !c.finished).sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
+  const done = all.filter(c => c.finished).sort((a,b) => (b.finishedAt||"").localeCompare(a.finishedAt||""));
+  const monthAgo = Date.now() - 30*dayMs;
+  const recent = S.brews.filter(b => new Date(b.at).getTime() >= monthAgo).length;
+  const summary = all.length
+    ? active.length + " caffè in dispensa · " + recent + (recent === 1 ? " estrazione" : " estrazioni") + " negli ultimi 30 giorni"
+    : S.catalog.size + (S.catalog.size === 1 ? " caffè" : " caffè") + " nel catalogo della community";
+  let html = '<header class="top"><div><h1>'+APP_TITLE+'</h1><p>'+summary+'</p>' + (S.offline ? '<p class="offline">Offline: vedi i dati dell\'ultima sincronizzazione. Le modifiche si salvano solo con la connessione.</p>' : "") + '</div>' +
+    '<button class="btn primary" data-act="new-coffee">+ Caffè</button></header>' + nudgesHtml(all.length);
+  html += '<section class="list" aria-label="In dispensa">';
+  if (!active.length){
+    html += '<div class="empty"><p>' + (all.length ? "Nessun caffè in dispensa: tutti terminati." : "Cerca il caffè che hai comprato nel catalogo della community, oppure crea tu la scheda con la foto della confezione.") +
+      '</p><button class="btn primary" data-act="new-coffee">Aggiungi un caffè</button></div>';
+  } else html += active.map(coffeeCard).join("");
+  html += "</section>";
+  if (done.length){
+    html += '<details class="finished"><summary>Terminati ('+done.length+")</summary><div class=\"list\">" + done.map(coffeeCard).join("") + "</div></details>";
+  }
+  html += footerHtml();
+  app.innerHTML = html;
+}
+
+function paramText(k, v, p){
+  const f = FIELDS[k] || {label:k};
+  if (k === "grind"){ const g = S.grinders.get(p.grinder); const l = g ? grinderLabel(g) : (p.grinderLabel || ""); return fmtNum(v) + (l ? " · " + esc(l) : ""); }
+  if (typeof v === "boolean") return v ? "Sì" : "No";
+  if (f.dur) return durFmt(v);
+  if (typeof v === "number") return fmtNum(v) + (f.unit ? " " + f.unit : "");
+  return esc(v);
+}
+function brewCard(b, coffee){
+  const p = b.params || {};
+  const parts = [];
+  for (const k of DISPLAY_ORDER){
+    const v = p[k];
+    if (v == null || v === "") continue;
+    if ((k === "time" || k === "bypass") && v === 0) continue;
+    const lbl = k === "bypass" ? "Bypass" : (FIELDS[k]?.label || k);
+    parts.push('<span><span class="lbl">'+esc(lbl)+'</span><b class="num">'+paramText(k, v, p)+"</b></span>");
+  }
+  const r = ratioText(b.method, p);
+  if (r) parts.splice(Math.min(2, parts.length), 0, '<span><span class="lbl">Rapporto</span><b class="num">'+r+"</b></span>");
+  const age = coffee && coffee.roastDate ? daysBetween(coffee.roastDate, b.at) : null;
+  return '<button class="brew" data-brew="'+esc(b.id)+'">' +
+    '<div class="row"><span class="method">'+esc(methodLabel(b.method))+(p.dripper ? " · "+esc(p.dripper) : "")+(p.device ? " · "+esc(p.device) : "")+"</span>"+stars(b.rating)+"</div>" +
+    '<div class="when">'+fmtWhen(b.at)+(age != null && age >= 0 ? " · "+age+" gg dalla tostatura" : "")+"</div>" +
+    (parts.length ? '<div class="params">'+parts.join("")+"</div>" : "") +
+    (b.notes ? '<p class="notes">'+esc(b.notes)+"</p>" : "") + "</button>";
+}
+
+function renderDetail(c){
+  const bs = brewsOf(c.id);
+  const used = [...new Set(bs.map(b => b.method))];
+  if (S.filter !== "all" && !used.includes(S.filter)) S.filter = "all";
+  const shown = S.filter === "all" ? bs : bs.filter(b => b.method === S.filter);
+  const rd = c.roastDate ? daysBetween(c.roastDate, new Date()) : null;
+  const k = S.catalog.get(c.catalogId);
+  const mine = k && k.createdBy === me();
+  const members = S.counts.get(c.catalogId) || 0;
+  const facts = [
+    ["Origine", c.origin], ["Varietà", c.variety], ["Processo", c.process], ["Profilo", c.profile],
+    ["Tostatura", c.roastDate ? fmtDate(c.roastDate) + (rd != null && rd >= 0 && !c.finished ? " ("+rd+" gg)" : "") : ""],
+    ["Confezione", c.weight ? fmtNum(c.weight) + " g" : ""], ["Prezzo", c.price ? "€ " + fmtNum(c.price) : ""],
+    ["In dispensa dal", fmtDate(c.createdAt)],
+  ].filter(f => f[1]);
+  let html = '<button class="btn ghost back" data-act="home">‹ Libreria</button>';
+  html += '<article class="hero">' + (c.photo ? '<img src="'+photoUrl(c.photo)+'" alt="Confezione di '+esc(c.name)+'">' : "") +
+    '<div class="body"><div>' + (c.finished ? '<div class="status">TERMINATO · '+fmtDate(c.finishedAt)+"</div>" : "") +
+    "<h1>"+esc(c.name)+"</h1>" + (c.roaster ? '<div class="roaster">'+esc(c.roaster)+"</div>" : "") + "</div>" +
+    (facts.length ? '<dl class="facts">' + facts.map(f => "<div><dt>"+f[0]+"</dt><dd>"+esc(f[1])+"</dd></div>").join("") + "</dl>" : "") +
+    (c.tasting ? '<p class="tasting">Note dichiarate: '+esc(c.tasting)+"</p>" : "") +
+    (k ? '<p class="byline">Scheda del catalogo creata da '+esc(creatorName(k)) + (members > 1 ? " · comprato da "+members+" membri" : "") + (mine ? "" : ". Solo chi l'ha creata può modificarla.") + "</p>" : "") +
+    '<div class="actions"><button class="btn" data-act="edit-bag">Modifica confezione</button>' +
+    (mine ? '<button class="btn" data-act="edit-entry">Modifica scheda</button>' : "") +
+    '<button class="btn" data-act="toggle-finished">'+(c.finished ? "Rimetti in dispensa" : "Segna come terminato")+"</button></div>" +
+    "</div></article>";
+  html += '<section class="list" aria-label="Estrazioni"><div class="sec-head"><h2>Estrazioni <span class="muted num">'+bs.length+'</span></h2>' +
+    '<button class="btn primary" data-act="new-brew">+ Estrazione</button></div>';
+  if (used.length > 1){
+    html += '<div class="chips" role="group" aria-label="Filtra per metodo">' +
+      '<button class="chip" data-filter="all" aria-pressed="'+(S.filter==="all")+'">Tutte</button>' +
+      used.map(k => '<button class="chip" data-filter="'+esc(k)+'" aria-pressed="'+(S.filter===k)+'">'+esc(methodLabel(k))+"</button>").join("") + "</div>";
+  }
+  if (!bs.length) html += '<div class="empty"><p>Nessuna estrazione registrata per questo caffè.</p><button class="btn primary" data-act="new-brew">Registra la prima</button></div>';
+  else html += shown.map(b => brewCard(b, c)).join("");
+  html += "</section>";
+  app.innerHTML = html;
+}
+
+/* ---------- click globali ---------- */
+app.addEventListener("click", e => {
+  const el = e.target.closest("[data-open],[data-act],[data-brew],[data-filter]");
+  if (!el) return;
+  const id = currentId();
+  if (el.dataset.open){ S.filter = "all"; go(el.dataset.open); window.scrollTo(0,0); return; }
+  if (el.dataset.filter){ S.filter = el.dataset.filter; render(); return; }
+  if (el.dataset.brew){ const b = S.brews.find(x => x.id === el.dataset.brew); if (b && S.bags.has(b.coffeeId)) brewSheet(view(S.bags.get(b.coffeeId)), b); return; }
+  const act = el.dataset.act;
+  const bag = id && S.bags.get(id);
+  if (act === "home") go(null);
+  else if (act === "new-coffee") catalogSheet();
+  else if (act === "edit-bag" && bag) bagSheet(S.catalog.get(bag.catalogId), bag);
+  else if (act === "edit-entry" && bag) entrySheet(S.catalog.get(bag.catalogId));
+  else if (act === "new-brew" && bag) brewSheet(view(bag), null);
+  else if (act === "toggle-finished" && bag) toggleFinished(bag);
+  else if (act === "settings") settingsSheet();
+  else if (act === "new-grinder") grinderSheet(null);
+  else if (act === "export") exportBackup(el);
+  else if (act === "import") importBackup();
+  else if (act === "logout") logout();
+});
+
+async function toggleFinished(bag){
+  const finished = !bag.finished;
+  try {
+    await retryOnce(() => db.collection("coffees").doc(bag.id).update({finished, finishedAt: finished ? new Date().toISOString() : null}));
+    toast(finished ? "Spostato tra i terminati" : "Rimesso in dispensa");
+  } catch(e){ toast(errMsg(e)); }
+}
+
+/* ---------- sheet generico ---------- */
+function openSheet(title, inner, cls){
+  const ov = document.createElement("div");
+  ov.className = "overlay" + (cls ? " " + cls : "");
+  ov.innerHTML = '<div class="sheet" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><div class="sheet-head"><h2>'+esc(title)+'</h2><button class="btn ghost" data-close>Chiudi</button></div>'+inner+"</div>";
+  document.body.appendChild(ov);
+  document.body.style.overflow = "hidden";
+  const close = () => { ov.remove(); if (!document.querySelector(".overlay")) document.body.style.overflow = ""; };
+  ov.addEventListener("click", e => { if (e.target === ov || e.target.closest("[data-close]")) close(); });
+  ov.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+  return {el: ov, close};
+}
+function confirmBox(text, okLabel){
+  return new Promise(res => {
+    const s = openSheet("Conferma", '<p style="margin:0">'+esc(text)+'</p><div class="form-foot"><button class="btn" data-no>Annulla</button><button class="btn primary" data-yes style="background:var(--danger);border-color:var(--danger)">'+esc(okLabel)+"</button></div>", "confirm");
+    s.el.querySelector("[data-no]").onclick = () => { s.close(); res(false); };
+    s.el.querySelector("[data-yes]").onclick = () => { s.close(); res(true); };
+    s.el.querySelector("[data-close]").addEventListener("click", () => res(false));
+  });
+}
+
+/* ---------- foto: ridimensiona e comprimi ---------- */
+function compress(file, max = 1400, q = 0.82){
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.round(img.naturalWidth * s), h = Math.round(img.naturalHeight * s);
+      const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      cv.toBlob(b => b ? resolve(b) : reject(new Error("toBlob")), "image/jpeg", q);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("img")); };
+    img.src = url;
+  });
+}
+async function uploadPhoto(file){
+  let blob; try { blob = await compress(file); } catch { blob = file; }
+  const type = blob.type && /^image\/(jpeg|png|webp|gif)$/.test(blob.type) ? blob.type : "image/jpeg";
+  return (await retryOnce(() => assets.upload(blob, {type}))).id;
+}
+
+/* ---------- catalogo: cerca e aggiungi ---------- */
+function entryCard(k){
+  const origin = [k.origin, k.process].filter(Boolean).map(esc).join(" · ");
+  const n = S.counts.get(k.id) || 0;
+  const inPantry = bagsOf(k.id).some(b => !b.finished);
+  const by = "aggiunto da " + esc(creatorName(k)) + (n ? " · comprato da " + n + (n === 1 ? " membro" : " membri") : "");
+  return '<button class="card mini" data-entry="'+esc(k.id)+'">' + thumbHtml(k.photo) +
+    '<div class="t"><span class="name">'+esc(k.name)+(inPantry ? ' <span class="pill fresh">in dispensa</span>' : "")+"</span>" +
+    (k.roaster ? '<span class="sub">'+esc(k.roaster)+"</span>" : "") +
+    (origin ? '<span class="sub">'+origin+"</span>" : "") +
+    '<span class="by">'+by+"</span></div></button>";
+}
+function searchCatalog(q, exclude){
+  const words = norm(q).split(" ").filter(Boolean);
+  let items = [...S.catalog.values()].filter(k => k.id !== exclude);
+  if (words.length){
+    items = items.filter(k => { const hay = norm([k.name, k.roaster, k.origin, k.variety, k.process, k.tasting].join(" ")); return words.every(w => hay.includes(w)); });
+    items.sort((a,b) => norm(a.name).localeCompare(norm(b.name)));
+  } else items.sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
+  return items;
+}
+function catalogSheet(){
+  const inner = '<div class="field"><label for="ks-q">Cerca nel catalogo della community</label>' +
+    '<input type="search" id="ks-q" autocomplete="off" placeholder="Nome, torrefazione, origine…"></div>' +
+    '<p class="hint" id="ks-count"></p><div class="list" id="ks-list"></div>' +
+    '<div class="empty"><p>Non lo trovi? Crea tu la scheda: la vedranno anche gli altri membri.</p><button class="btn primary" id="ks-new" type="button">Crea una nuova scheda</button></div>';
+  const s = openSheet("Aggiungi un caffè", inner);
+  const $ = sel => s.el.querySelector(sel);
+  const draw = () => {
+    const q = $("#ks-q").value, items = searchCatalog(q), shown = items.slice(0, 60);
+    $("#ks-count").textContent = q.trim()
+      ? (items.length ? items.length + (items.length === 1 ? " risultato" : " risultati") : "Nessun caffè trovato con questa ricerca.")
+      : (S.catalog.size ? "Aggiunti di recente" : "Il catalogo è ancora vuoto: crea la prima scheda.");
+    $("#ks-list").innerHTML = shown.map(entryCard).join("") + (items.length > shown.length ? '<p class="hint">Altri '+(items.length - shown.length)+': affina la ricerca.</p>' : "");
+  };
+  draw();
+  $("#ks-q").addEventListener("input", draw);
+  $("#ks-list").addEventListener("click", e => { const b = e.target.closest("[data-entry]"); if (!b) return; const k = S.catalog.get(b.dataset.entry); if (k){ s.close(); bagSheet(k, null); } });
+  $("#ks-new").addEventListener("click", () => { const q = $("#ks-q").value.trim(); s.close(); entrySheet(null, {name:q}); });
+  setTimeout(() => $("#ks-q").focus(), 50);
+}
+
+const bagFieldsHtml = b => '<div class="grid2">' +
+  '<div class="field"><label for="bg-roast">Data di tostatura</label><input type="date" id="bg-roast" value="'+esc(b.roastDate || "")+'"></div>' +
+  '<div class="field"><label for="bg-weight">Peso confezione</label><div class="unitwrap"><input class="numin" type="text" inputmode="decimal" id="bg-weight" value="'+esc(b.weight!=null?fmtNum(b.weight):"")+'"><span class="unit">g</span></div></div>' +
+  '<div class="field"><label for="bg-price">Prezzo</label><div class="unitwrap"><input class="numin" type="text" inputmode="decimal" id="bg-price" value="'+esc(b.price!=null?fmtNum(b.price):"")+'"><span class="unit">€</span></div></div>' +
+  "</div>";
+const readBagFields = $ => ({roastDate: $("#bg-roast").value || "", weight: numParse($("#bg-weight").value), price: numParse($("#bg-price").value)});
+
+/* Confezione nella propria dispensa (nuova o da modificare). */
+function bagSheet(k, bag){
+  if (!k) return;
+  const isNew = !bag; bag = bag || {};
+  const already = isNew && bagsOf(k.id).some(b => !b.finished);
+  const inner = '<div class="card mini static">' + thumbHtml(k.photo) + '<div class="t"><span class="name">'+esc(k.name)+"</span>" +
+      (k.roaster ? '<span class="sub">'+esc(k.roaster)+"</span>" : "") +
+      ([k.origin, k.variety, k.process].filter(Boolean).length ? '<span class="sub">'+[k.origin, k.variety, k.process].filter(Boolean).map(esc).join(" · ")+"</span>" : "") +
+      (k.tasting ? '<span class="by">Note dichiarate: '+esc(k.tasting)+"</span>" : "") + "</div></div>" +
+    (already ? '<p class="hint">Hai già questo caffè in dispensa: verrà aggiunta un\'altra confezione.</p>' : "") +
+    '<form id="bg" novalidate><span class="flabel">La tua confezione</span>' + bagFieldsHtml(bag) +
+    '<div class="form-foot">' + (isNew ? "<span></span>" : '<button type="button" class="btn danger" id="bg-del">Togli dalla dispensa</button>') +
+    '<button type="submit" class="btn primary" id="bg-save">'+(isNew ? "Aggiungi alla dispensa" : "Salva")+"</button></div></form>";
+  const s = openSheet(isNew ? "Aggiungi alla dispensa" : "Modifica confezione", inner);
+  const $ = sel => s.el.querySelector(sel);
+  const del = $("#bg-del");
+  if (del) del.addEventListener("click", async () => {
+    const n = brewsOf(bag.id).length;
+    if (!(await confirmBox("Togliere “"+k.name+"” dalla dispensa" + (n ? " ed eliminare le sue "+n+" estrazioni" : "") + "? La scheda resta nel catalogo. Non si può annullare.", "Elimina"))) return;
+    try {
+      for (const b of brewsOf(bag.id)) await retryOnce(() => db.collection("brews").doc(b.id).delete());
+      await retryOnce(() => db.collection("coffees").doc(bag.id).delete());
+      loadCounts(); s.close(); go(null); toast("Confezione eliminata");
+    } catch(e){ toast(errMsg(e)); }
+  });
+  $("#bg").addEventListener("submit", async e => {
+    e.preventDefault();
+    const btn = $("#bg-save"); btn.disabled = true; btn.textContent = "Salvo…";
+    try {
+      const data = {catalogId: k.id, ...readBagFields($), finished: !!bag.finished, finishedAt: bag.finishedAt || null, createdAt: bag.createdAt || new Date().toISOString()};
+      const id = bag.id || uid("c");
+      await retryOnce(() => db.collection("coffees").doc(id).set(data));
+      loadCounts(); s.close();
+      if (isNew) go(id);
+      toast(isNew ? "Aggiunto alla dispensa" : "Modifiche salvate");
+    } catch(err){ btn.disabled = false; btn.textContent = isNew ? "Aggiungi alla dispensa" : "Salva"; toast(errMsg(err)); }
+  });
+}
+
+/* Scheda del catalogo: nuova (con la prima confezione) o modifica da parte di chi l'ha creata. */
+function entrySheet(k, opts){
+  const isNew = !k; k = k || {name: (opts && opts.name) || ""};
+  if (!isNew && k.createdBy !== me()){ toast("Solo chi ha creato la scheda può modificarla."); return; }
+  const v = key => esc(k[key] ?? "");
+  const photoBlock = '<label class="photo-pick" for="cf-photo">' + (k.photo ? '<img src="'+photoUrl(k.photo)+'" alt="">' : '<span>'+beanSvg+'<br>Aggiungi la foto della confezione</span>') +
+      '<input type="file" id="cf-photo" accept="image/*"></label>' + (k.photo ? '<button type="button" class="btn ghost small" id="cf-rmphoto">Rimuovi foto</button>' : "");
+  const inner = '<form id="cf" novalidate>' + (isNew ? '<p class="hint" style="margin-top:-8px">La scheda sarà visibile a tutti i membri. Data di tostatura, peso e prezzo restano solo tuoi.</p>' : "") + photoBlock +
+    '<div class="field"><label for="cf-name">Nome del caffè *</label><input type="text" id="cf-name" required value="'+v("name")+'" placeholder="es. Etiopia Guji Hambela"></div>' +
+    '<div class="field"><label for="cf-roaster">Torrefazione</label><input type="text" id="cf-roaster" value="'+v("roaster")+'"></div>' +
+    '<div class="dupes" id="cf-dupes"></div>' +
+    '<div class="grid2">' +
+      '<div class="field"><label for="cf-origin">Origine</label><input type="text" id="cf-origin" value="'+v("origin")+'" placeholder="Paese, regione"></div>' +
+      '<div class="field"><label for="cf-variety">Varietà</label><input type="text" id="cf-variety" value="'+v("variety")+'" placeholder="es. Heirloom, Gesha"></div>' +
+      '<div class="field"><label for="cf-process">Processo</label><input type="text" id="cf-process" list="dl-process" value="'+v("process")+'"><datalist id="dl-process">'+PROCESSES.map(p=>'<option value="'+p+'">').join("")+'</datalist></div>' +
+      '<div class="field"><label for="cf-profile">Profilo di tostatura</label><select id="cf-profile">'+["","Filtro","Espresso","Omni"].map(o=>'<option'+(k.profile===o?" selected":"")+'>'+o+"</option>").join("")+"</select></div>" +
+    "</div>" +
+    '<div class="field"><label for="cf-tasting">Note di degustazione dichiarate</label><input type="text" id="cf-tasting" value="'+v("tasting")+'" placeholder="es. pesca, gelsomino, bergamotto"></div>' +
+    (isNew ? '<span class="flabel">La tua confezione</span>' + bagFieldsHtml({}) : "") +
+    '<div class="form-foot">' + (isNew ? "<span></span>" : '<button type="button" class="btn danger" id="cf-del">Elimina dal catalogo</button>') +
+    '<button type="submit" class="btn primary" id="cf-save">'+(isNew ? "Crea e aggiungi" : "Salva")+"</button></div></form>";
+  const s = openSheet(isNew ? "Nuova scheda caffè" : "Modifica scheda", inner);
+  const $ = sel => s.el.querySelector(sel);
+  let pendingFile = null, removePhoto = false;
+  const fileIn = $("#cf-photo");
+  fileIn.addEventListener("change", () => {
+    const f = fileIn.files && fileIn.files[0]; if (!f) return;
+    pendingFile = f; removePhoto = false;
+    const pk = $(".photo-pick"); const old = pk.querySelector("img, span"); if (old) old.remove();
+    const im = document.createElement("img"); im.alt = ""; im.src = URL.createObjectURL(f); pk.insertBefore(im, fileIn);
+  });
+  const rm = $("#cf-rmphoto");
+  if (rm) rm.addEventListener("click", () => { removePhoto = true; pendingFile = null; const pk = $(".photo-pick"); const im = pk.querySelector("img"); if (im) im.remove(); const sp = document.createElement("span"); sp.innerHTML = beanSvg + "<br>Aggiungi la foto della confezione"; pk.insertBefore(sp, fileIn); rm.remove(); });
+
+  /* avvisa se un caffè simile è già nel catalogo */
+  const drawDupes = () => {
+    const box = $("#cf-dupes");
+    const name = $("#cf-name").value.trim(); if (name.length < 3){ box.innerHTML = ""; return; }
+    const hits = searchCatalog(name + " " + $("#cf-roaster").value.trim(), k.id).slice(0, 3);
+    const hits2 = hits.length ? hits : searchCatalog(name, k.id).slice(0, 3);
+    box.innerHTML = hits2.length ? '<span class="flabel">Forse è già nel catalogo</span>' + hits2.map(h =>
+      '<div class="item static"><span class="t"><b>'+esc(h.name)+"</b>"+(h.roaster ? '<span class="small muted">'+esc(h.roaster)+"</span>" : "")+"</span>" +
+      (isNew ? '<button type="button" class="btn small" data-use="'+esc(h.id)+'">Usa questa</button>' : "") + "</div>").join("") : "";
+  };
+  $("#cf-name").addEventListener("input", drawDupes);
+  $("#cf-roaster").addEventListener("input", drawDupes);
+  $("#cf-dupes").addEventListener("click", e => { const b = e.target.closest("[data-use]"); if (!b) return; const h = S.catalog.get(b.dataset.use); if (h){ s.close(); bagSheet(h, null); } });
+  drawDupes();
+  if (isNew) setTimeout(() => $("#cf-name").focus(), 50);
+
+  const del = $("#cf-del");
+  if (del) del.addEventListener("click", async () => {
+    await loadCounts();
+    const mine = bagsOf(k.id);
+    if ((S.counts.get(k.id) || 0) > (mine.length ? 1 : 0)){ toast(errMsg({code:"in_use"})); return; }
+    const nb = mine.reduce((n, b) => n + brewsOf(b.id).length, 0);
+    if (!(await confirmBox("Eliminare “"+k.name+"” dal catalogo" + (mine.length ? " insieme alla tua confezione" + (nb ? " e a "+nb+" estrazioni" : "") : "") + "? Non si può annullare.", "Elimina"))) return;
+    try {
+      for (const b of mine){
+        for (const br of brewsOf(b.id)) await retryOnce(() => db.collection("brews").doc(br.id).delete());
+        await retryOnce(() => db.collection("coffees").doc(b.id).delete());
+      }
+      await retryOnce(() => db.collection("catalog").doc(k.id).delete());
+      if (k.photo) assets.delete(k.photo).catch(() => {});
+      loadCounts(); s.close(); go(null); toast("Scheda eliminata dal catalogo");
+    } catch(e){ toast(errMsg(e)); }
+  });
+
+  $("#cf").addEventListener("submit", async e => {
+    e.preventDefault();
+    const name = $("#cf-name").value.trim();
+    if (!name){ $("#cf-name").focus(); toast("Scrivi il nome del caffè"); return; }
+    const btn = $("#cf-save"); btn.disabled = true; btn.textContent = pendingFile ? "Carico la foto…" : "Salvo…";
+    try {
+      let photo = removePhoto ? null : (k.photo || null);
+      const oldPhoto = k.photo || null;
+      if (pendingFile) photo = await uploadPhoto(pendingFile);
+      const data = {
+        name, roaster:$("#cf-roaster").value.trim(), origin:$("#cf-origin").value.trim(), variety:$("#cf-variety").value.trim(),
+        process:$("#cf-process").value.trim(), profile:$("#cf-profile").value, tasting:$("#cf-tasting").value.trim(),
+        photo, createdAt: k.createdAt || new Date().toISOString(),
+      };
+      const kid = k.id || uid("k");
+      await retryOnce(() => db.collection("catalog").doc(kid).set(data));
+      if (oldPhoto && oldPhoto !== photo) assets.delete(oldPhoto).catch(() => {});
+      if (isNew){
+        const bagId = uid("c");
+        await retryOnce(() => db.collection("coffees").doc(bagId).set({catalogId: kid, ...readBagFields($), finished:false, finishedAt:null, createdAt:new Date().toISOString()}));
+        loadCounts(); s.close(); go(bagId); toast("Scheda creata e caffè aggiunto alla dispensa");
+      } else { s.close(); toast("Scheda aggiornata"); }
+    } catch(err){ btn.disabled = false; btn.textContent = isNew ? "Crea e aggiungi" : "Salva"; toast(errMsg(err)); }
+  });
+}
+
+/* ---------- macinini ---------- */
+function grinderSheet(g, onSaved){
+  const isNew = !g; g = g || {burrs:"Standard"};
+  const custom = g.burrs && g.burrs !== "Standard";
+  const isDefault = !isNew && defaultGrinderId() === g.id;
+  const numField = (id, label, val, hint) => '<div class="field"><label for="'+id+'">'+label+'</label><input class="numin" type="text" inputmode="decimal" id="'+id+'" value="'+esc(val != null ? fmtNum(val) : "")+'">' + (hint ? '<p class="hint">'+hint+"</p>" : "") + "</div>";
+  const inner = '<form id="gf" novalidate>' +
+    (isNew ? '<div class="field"><span class="flabel">Parti da un modello (facoltativo)</span><div class="seg small" id="gf-tpl">' +
+      GRINDER_TEMPLATES.map(t => '<button type="button" data-tpl="'+t.key+'">'+esc(t.brand+" "+t.model)+"</button>").join("") + "</div></div>" : "") +
+    '<div class="grid2">' +
+      '<div class="field"><label for="gf-brand">Marca *</label><input type="text" id="gf-brand" value="'+esc(g.brand || "")+'" placeholder="es. Comandante"></div>' +
+      '<div class="field"><label for="gf-model">Modello *</label><input type="text" id="gf-model" value="'+esc(g.model || "")+'" placeholder="es. C40 MK4"></div>' +
+    "</div>" +
+    '<div class="field"><span class="flabel">Macine</span><div class="seg" id="gf-burrs" role="radiogroup" aria-label="Macine">' +
+      '<button type="button" role="radio" data-v="std" aria-checked="'+(!custom)+'">Standard</button>' +
+      '<button type="button" role="radio" data-v="custom" aria-checked="'+custom+'">Altre</button></div>' +
+      '<input type="text" id="gf-burrname" value="'+esc(custom ? g.burrs : "")+'" placeholder="Nome delle macine, es. SSP Multipurpose"'+(custom ? "" : " hidden")+' style="margin-top:6px"></div>' +
+    '<div class="grid2">' +
+      numField("gf-min", "Valore minimo *", g.min ?? 0, "Macine chiuse o regolazione più fine") +
+      numField("gf-max", "Valore massimo *", g.max, "Regolazione più grossa") +
+      numField("gf-step", "Step minimo *", g.step, "Di quanto cambia il valore con una tacca o un click (es. 0,2 sul Pietro)") +
+    "</div>" +
+    (isNew && !S.grinders.size ? "" : '<div class="field"><span class="flabel">Macinino predefinito</span><div class="seg" id="gf-def" data-bool="1" role="radiogroup" aria-label="Macinino predefinito">' +
+      '<button type="button" role="radio" data-v="1" aria-checked="'+isDefault+'">Sì</button><button type="button" role="radio" data-v="0" aria-checked="'+(!isDefault)+'">No</button></div>' +
+      '<p class="hint">Le nuove estrazioni partono con questo macinino, salvo predefiniti diversi per un metodo.</p></div>') +
+    '<p class="err" id="gf-err" hidden style="color:var(--danger);margin:0;font-size:14px"></p>' +
+    '<div class="form-foot">' + (isNew ? "<span></span>" : '<button type="button" class="btn danger" id="gf-del">Elimina macinino</button>') +
+    '<button type="submit" class="btn primary" id="gf-save">'+(isNew ? "Aggiungi" : "Salva")+"</button></div></form>";
+  const s = openSheet(isNew ? "Nuovo macinino" : "Modifica macinino", inner);
+  const $ = sel => s.el.querySelector(sel);
+  let burrsCustom = custom, makeDefault = isNew ? !S.grinders.size : isDefault;
+  const setBurrs = c => { burrsCustom = c; $("#gf-burrs").querySelectorAll("[data-v]").forEach(x => x.setAttribute("aria-checked", String((x.dataset.v === "custom") === c))); $("#gf-burrname").hidden = !c; if (c) $("#gf-burrname").focus(); };
+  $("#gf-burrs").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (b) setBurrs(b.dataset.v === "custom"); });
+  const defSeg = $("#gf-def");
+  if (defSeg) defSeg.addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; makeDefault = b.dataset.v === "1"; defSeg.querySelectorAll("[data-v]").forEach(x => x.setAttribute("aria-checked", String((x.dataset.v === "1") === makeDefault))); });
+  const tpl = $("#gf-tpl");
+  if (tpl) tpl.addEventListener("click", e => {
+    const b = e.target.closest("[data-tpl]"); if (!b) return;
+    const t = GRINDER_TEMPLATES.find(x => x.key === b.dataset.tpl);
+    $("#gf-brand").value = t.brand; $("#gf-model").value = t.model;
+    $("#gf-min").value = fmtNum(t.min); $("#gf-max").value = fmtNum(t.max); $("#gf-step").value = fmtNum(t.step);
+    setBurrs(false);
+    tpl.querySelectorAll("[data-tpl]").forEach(x => x.setAttribute("aria-checked", String(x === b)));
+  });
+  if (isNew) setTimeout(() => $("#gf-brand").focus(), 50);
+
+  const del = $("#gf-del");
+  if (del) del.addEventListener("click", async () => {
+    if (!(await confirmBox("Eliminare “"+grinderLabel(g)+"”? Le estrazioni già salvate mantengono il nome del macinino.", "Elimina"))) return;
+    try { await retryOnce(() => db.collection("grinders").doc(g.id).delete()); s.close(); toast("Macinino eliminato"); if (onSaved) onSaved(null); }
+    catch(e){ toast(errMsg(e)); }
+  });
+
+  $("#gf").addEventListener("submit", async e => {
+    e.preventDefault();
+    const err = $("#gf-err"); err.hidden = true;
+    const fail = (msg, el) => { err.hidden = false; err.textContent = msg; if (el) el.focus(); };
+    const brand = $("#gf-brand").value.trim(), model = $("#gf-model").value.trim();
+    const burrs = burrsCustom ? ($("#gf-burrname").value.trim() || "") : "Standard";
+    const min = numParse($("#gf-min").value), max = numParse($("#gf-max").value), step = numParse($("#gf-step").value);
+    if (!brand) return fail("Scrivi la marca.", $("#gf-brand"));
+    if (!model) return fail("Scrivi il modello.", $("#gf-model"));
+    if (burrsCustom && !burrs) return fail("Scrivi il nome delle macine, oppure scegli Standard.", $("#gf-burrname"));
+    if (min == null) return fail("Inserisci il valore minimo.", $("#gf-min"));
+    if (max == null) return fail("Inserisci il valore massimo.", $("#gf-max"));
+    if (max <= min) return fail("Il valore massimo deve essere più alto del minimo.", $("#gf-max"));
+    if (step == null || step <= 0) return fail("Lo step deve essere un numero maggiore di zero.", $("#gf-step"));
+    if (step > max - min) return fail("Lo step è più grande dell'intera scala.", $("#gf-step"));
+    if ((max - min) / step > 2000) return fail("Con questo step la scala ha più di 2000 posizioni: controlla i valori.", $("#gf-step"));
+    const btn = $("#gf-save"); btn.disabled = true; btn.textContent = "Salvo…";
+    try {
+      const id = g.id || uid("g");
+      const data = {brand, model, burrs, min, max, step, createdAt: g.createdAt || new Date().toISOString()};
+      await retryOnce(() => db.collection("grinders").doc(id).set(data));
+      if (makeDefault && meta().defaultGrinder !== id) await setMeta({defaultGrinder: id}).catch(() => {});
+      else if (!makeDefault && meta().defaultGrinder === id) await setMeta({defaultGrinder: null}).catch(() => {});
+      s.close(); render(); toast(isNew ? "Macinino aggiunto" : "Macinino aggiornato");
+      if (onSaved) onSaved(S.grinders.get(id));
+    } catch(e2){ btn.disabled = false; btn.textContent = isNew ? "Aggiungi" : "Salva"; toast(errMsg(e2)); }
+  });
+}
+
+/* ---------- impostazioni ---------- */
+function settingsSheet(){
+  const s = openSheet("Impostazioni", '<div id="st" style="display:flex;flex-direction:column;gap:16px"></div>');
+  const box = s.el.querySelector("#st");
+  const draw = () => {
+    const defId = defaultGrinderId();
+    const saved = savedDefaults();
+    const savedKeys = Object.keys(saved).filter(k => METHODS[k] && saved[k]);
+    box.innerHTML =
+      '<section class="sec"><h3>Il tuo nome</h3><p class="hint">Gli altri membri lo vedono accanto ai caffè che aggiungi al catalogo.</p>' +
+        '<form id="st-name" class="grid2" style="grid-template-columns:1fr auto;align-items:end" novalidate><div class="field"><label for="st-name-in" class="sr">Nome</label><input type="text" id="st-name-in" maxlength="40" value="'+esc(myName())+'" placeholder="es. Alessio"></div>' +
+        '<button class="btn primary" type="submit">Salva</button></form></section>' +
+      '<section class="sec"><div class="sec-head"><h3>Macinini</h3><button class="btn small" type="button" data-g="new">+ Macinino</button></div>' +
+        (S.grinders.size ? grinderList().map(g => '<button class="item" type="button" data-g="'+esc(g.id)+'"><span class="t"><b>'+esc(grinderLabel(g))+'</b><span class="small muted num">'+fmtNum(g.min)+" – "+fmtNum(g.max)+" · step "+fmtNum(g.step)+"</span></span>"+(g.id === defId ? '<span class="pill fresh">predefinito</span>' : "")+"</button>").join("")
+          : '<p class="hint">Nessun macinino. Aggiungine uno per registrare la macinatura.</p>') + "</section>" +
+      '<section class="sec"><h3>Predefiniti dei metodi</h3><p class="hint">Nel modulo di una nuova estrazione, “Salva come predefiniti” fa partire quel metodo dai valori scelti.</p>' +
+        (savedKeys.length ? savedKeys.map(k => { const p = saved[k]; const out = p.yield ?? p.water; const g = S.grinders.get(p.grinder);
+          return '<div class="item static"><span class="t"><b>'+esc(methodLabel(k))+'</b><span class="small muted num">'+[p.dose != null ? fmtNum(p.dose)+" g" : "", out != null ? "→ "+fmtNum(out)+" g" : "", p.temp != null ? fmtNum(p.temp)+" °C" : "", p.grind != null ? "macinatura "+fmtNum(p.grind)+(g ? " ("+esc(grinderLabel(g))+")" : "") : ""].filter(Boolean).join(" · ")+"</span></span>" +
+            '<button class="btn small" type="button" data-reset="'+esc(k)+'">Ripristina</button></div>'; }).join("")
+          : '<p class="hint">Tutti i metodi usano i valori di partenza dell\'app.</p>') + "</section>";
+    box.querySelector("#st-name").addEventListener("submit", async e => {
+      e.preventDefault();
+      const name = box.querySelector("#st-name-in").value.trim().slice(0, 40);
+      try {
+        const {error} = await sb.from("profiles").upsert({id: me(), name, updated_at: new Date().toISOString()});
+        if (error) throw wrapErr(error);
+        S.profiles.set(me(), name); saveCache(); render(); toast("Nome salvato");
+      } catch(err){ toast(errMsg(err)); }
+    });
+  };
+  box.addEventListener("click", async e => {
+    const g = e.target.closest("[data-g]");
+    if (g){ grinderSheet(g.dataset.g === "new" ? null : S.grinders.get(g.dataset.g), () => draw()); return; }
+    const r = e.target.closest("[data-reset]");
+    if (r){
+      const all = {...savedDefaults()}; delete all[r.dataset.reset];
+      try { await setMeta({methodDefaults: all}); draw(); toast("Predefiniti ripristinati"); } catch(err){ toast(errMsg(err)); }
+    }
+  });
+  draw();
+}
+
+/* ---------- form estrazione ---------- */
+function valueOut(k, v){
+  const f = FIELDS[k];
+  if (k === "grind") return fmtNum(v);
+  if (f.dur) return v ? durFmt(v) : "0 s";
+  return fmtNum(v) + (f.unit ? " " + f.unit : "");
+}
+function controlHtml(k, vals){
+  const f = FIELDS[k], v = vals[k], id = "bf-" + k;
+  if (f.type === "choice"){
+    return '<div class="field"><span class="flabel">'+f.label+'</span><div class="seg" data-k="'+k+'" role="radiogroup" aria-label="'+f.label+'">' +
+      f.options.map(o => '<button type="button" role="radio" data-v="'+esc(o)+'" aria-checked="'+(v===o)+'">'+esc(o)+"</button>").join("") + "</div></div>";
+  }
+  if (f.type === "bool"){
+    return '<div class="field"><span class="flabel">'+f.label+'</span><div class="seg" data-k="'+k+'" data-bool="1" role="radiogroup" aria-label="'+f.label+'">' +
+      '<button type="button" role="radio" data-v="1" aria-checked="'+(v===true)+'">Sì</button><button type="button" role="radio" data-v="0" aria-checked="'+(v===false)+'">No</button></div></div>';
+  }
+  let min = f.min, max = f.max, step = f.step, head = f.label, extra = "";
+  if (f.type === "grind"){
+    const list = grinderList();
+    if (!vals.grinder){
+      return '<div class="field sl" data-k="grind"><div class="sl-head"><span class="flabel">Macinatura</span></div>' +
+        '<p class="hint">Aggiungi il tuo macinino per registrare la macinatura.</p><button type="button" class="btn small" data-addgrinder style="align-self:flex-start">+ Macinino</button></div>';
+    }
+    const G = grindRange(vals.grinder, vals.grind);
+    min = G.min; max = G.max; step = G.step;
+    const opts = list.map(g => [g.id, grinderLabel(g)]);
+    if (!S.grinders.has(vals.grinder)) opts.push([vals.grinder, vals.grinderLabel || "Macinino eliminato"]);
+    extra = opts.length > 1
+      ? '<div class="seg small" data-k="grinder" role="radiogroup" aria-label="Macinino">' +
+        opts.map(([gk, l]) => '<button type="button" role="radio" data-v="'+esc(gk)+'" aria-checked="'+(vals.grinder===gk)+'">'+esc(l)+"</button>").join("") + "</div>"
+      : '<p class="hint">'+esc(opts[0][1])+"</p>";
+  }
+  const val = v == null ? min : v;
+  const mid = f.type === "grind" ? '<div class="scale"><span>'+fmtNum(min)+' fine</span><span>'+fmtNum(max)+' grossa</span></div>' : "";
+  return '<div class="field sl" data-k="'+k+'">' +
+    '<div class="sl-head"><label for="'+id+'">'+head+'</label><output class="num" id="'+id+'-out">'+valueOut(k, val)+"</output></div>" + extra +
+    '<div class="sl-row"><button type="button" class="step" data-d="-1" aria-label="Diminuisci '+esc(head)+'">−</button>' +
+    '<input type="range" id="'+id+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'">' +
+    '<button type="button" class="step" data-d="1" aria-label="Aumenta '+esc(head)+'">+</button></div>' + mid + "</div>";
+}
+
+function brewSheet(coffee, b){
+  if (!coffee) return;
+  const isNew = !b;
+  const lastMethod = (brewsOf(coffee.id).find(x => METHODS[x.method]) || S.brews.find(x => METHODS[x.method]) || {}).method || "espressoClassico";
+  let method = b ? b.method : lastMethod;
+  let rating = b ? (b.rating || 0) : 0;
+  let vals = b ? {...(b.params || {})} : methodDefaults(method);
+  let bloomLinked = isNew;
+  const methodKeys = Object.keys(METHODS).concat(METHODS[method] ? [] : [method]);
+
+  const inner = '<form id="bf" novalidate>' +
+    '<p class="hint" style="margin-top:-8px">'+esc(coffee.name)+(coffee.roaster?" · "+esc(coffee.roaster):"")+"</p>" +
+    '<div class="field"><span class="flabel">Metodo</span><div class="chips" role="radiogroup" id="bf-methods">' +
+      methodKeys.map(k => '<button type="button" class="chip" role="radio" data-m="'+esc(k)+'" aria-pressed="'+(k===method)+'" aria-checked="'+(k===method)+'">'+esc(methodLabel(k))+"</button>").join("") +
+    "</div></div>" +
+    '<div class="field"><label for="bf-at">Data e ora</label><input type="datetime-local" id="bf-at" value="'+(b ? localDT(new Date(b.at)) : localDT())+'"></div>' +
+    '<div class="prefill" id="bf-prefill"></div>' +
+    '<div class="controls" id="bf-fields"></div>' +
+    '<p class="calc" id="bf-calc"></p>' +
+    '<div class="prefill" id="bf-defs"></div>' +
+    (coffee.tasting ? '<div class="declared"><span class="flabel">Note dichiarate in busta</span><p>'+esc(coffee.tasting)+'</p></div>' : "") +
+    '<div class="field"><span class="flabel">Voto</span><div class="rating" id="bf-rating">' + [1,2,3,4,5].map(i => '<button type="button" data-r="'+i+'" aria-label="'+i+' su 5">★</button>').join("") + "</div></div>" +
+    '<div class="field"><label for="bf-notes">Com\'è uscito</label><textarea id="bf-notes" placeholder="Gusto, corpo, acidità, difetti, cosa cambiare la prossima volta…">'+esc(b?.notes||"")+"</textarea></div>" +
+    '<div class="form-foot">' + (isNew ? "<span></span>" : '<button type="button" class="btn danger" id="bf-del">Elimina</button>') +
+    '<button type="submit" class="btn primary" id="bf-save">'+(isNew?"Salva estrazione":"Salva modifiche")+"</button></div></form>";
+  const s = openSheet(isNew ? "Nuova estrazione" : "Modifica estrazione", inner);
+  const $ = sel => s.el.querySelector(sel);
+
+  function fieldsOf(m){ return METHODS[m] ? METHODS[m].fields : Object.keys(vals).filter(k => k !== "grinder" && k !== "grinderLabel" && FIELDS[k]); }
+  function readParams(){
+    const p = {};
+    for (const k of fieldsOf(method)){ if (vals[k] != null && vals[k] !== "") p[k] = vals[k]; }
+    if (p.grind != null && vals.grinder){
+      p.grinder = vals.grinder;
+      p.grinderLabel = grinderLabel(S.grinders.get(vals.grinder)) || vals.grinderLabel || "";
+    } else delete p.grind;
+    return p;
+  }
+  function updateCalc(){
+    const p = readParams(); const bits = [];
+    const r = ratioText(method, p); if (r) bits.push("Rapporto <b class=\"num\">"+r+"</b>");
+    if (r && /^espresso/.test(method) && p.yield != null) bits.push("Resa <b class=\"num\">"+fmtNum(p.yield)+" g</b>");
+    const dr = methodRatio(method); if (r && dr && r !== "1:" + fmtNum(dr)) bits.push("predefinito 1:" + fmtNum(dr));
+    if (p.bypass) bits.push("In infusione <b class=\"num\">"+fmtNum(p.water - p.bypass)+" g</b>");
+    if (coffee.roastDate){ const a = daysBetween(coffee.roastDate, $("#bf-at").value); if (a != null && a >= 0) bits.push("<b class=\"num\">"+a+"</b> gg dalla tostatura"); }
+    $("#bf-calc").innerHTML = bits.join(" · ");
+  }
+  function drawDefs(){
+    $("#bf-defs").innerHTML = METHODS[method]
+      ? '<button type="button" class="btn small" id="bf-setdef">Salva come predefiniti di '+esc(methodLabel(method))+"</button>"
+      : "";
+  }
+  function drawPrefill(){
+    const box = $("#bf-prefill");
+    const last = isNew && METHODS[method] ? (brewsOf(coffee.id).find(x => x.method === method) || S.brews.find(x => x.method === method)) : null;
+    box.innerHTML = last
+      ? '<button type="button" class="btn small" id="bf-uselast">Usa i valori dell\'ultima '+esc(methodLabel(method))+'</button><span class="hint">'+(last.coffeeId === coffee.id ? "questo caffè" : "altro caffè")+", "+fmtDate(last.at)+"</span>"
+      : "";
+    const btn = $("#bf-uselast");
+    if (btn) btn.onclick = () => { vals = {...methodDefaults(method), ...(last.params || {})}; if (last.params && last.params.grind != null && !last.params.grinder){ delete vals.grind; } bloomLinked = false; drawFields(); toast("Valori dell'ultima estrazione caricati"); };
+  }
+  function drawFields(){
+    $("#bf-fields").innerHTML = fieldsOf(method).map(k => FIELDS[k] && FIELDS[k].type ? controlHtml(k, vals) : "").join("");
+    updateCalc();
+  }
+  function setVal(k, v, fromInput){
+    vals[k] = v;
+    const out = $("#bf-" + k + "-out"); if (out) out.textContent = valueOut(k, v);
+    if (!fromInput){ const r = $("#bf-" + k); if (r) r.value = v; }
+    if (k === "dose" && bloomLinked && METHODS[method]?.bloomAuto && fieldsOf(method).includes("bloomWater")){
+      setVal("bloomWater", Math.min(150, Math.round(v * METHODS[method].bloomAuto)));
+    }
+    if (k === "dose" && methodRatio(method)){
+      const ok = fieldsOf(method).includes("yield") ? "yield" : "water", F = FIELDS[ok];
+      if (fieldsOf(method).includes(ok)) setVal(ok, snap(v * methodRatio(method), F.min, F.max, F.step));
+    }
+    if (k === "bloomWater" && fromInput) bloomLinked = false;
+    updateCalc();
+  }
+  drawPrefill(); drawFields(); drawDefs();
+
+  const fieldsEl = $("#bf-fields");
+  fieldsEl.addEventListener("input", e => {
+    const r = e.target; if (r.type !== "range") return;
+    const k = r.closest("[data-k]").dataset.k, f = FIELDS[k];
+    if (f && f.slideStep){ const v = snap(Number(r.value), f.min, f.max, f.slideStep); if (v !== vals[k]) setVal(k, v); else r.value = v; return; }
+    setVal(k, Number(r.value), true);
+  });
+  fieldsEl.addEventListener("click", e => {
+    if (e.target.closest("[data-addgrinder]")){
+      grinderSheet(null, g => { if (!g) return; vals.grinder = g.id; vals.grind = defaultGrind(method, g.id); drawFields(); });
+      return;
+    }
+    const st = e.target.closest(".step");
+    if (st){
+      const wrap = st.closest("[data-k]"), k = wrap.dataset.k, r = wrap.querySelector("input[type=range]");
+      const min = Number(r.min), max = Number(r.max), step = Number(r.step);
+      const nv = snap((vals[k] == null ? min : vals[k]) + Number(st.dataset.d) * step, min, max, step);
+      if (k === "bloomWater") bloomLinked = false;
+      setVal(k, nv); return;
+    }
+    const opt = e.target.closest(".seg [data-v]");
+    if (opt){
+      const seg = opt.closest(".seg"), k = seg.dataset.k;
+      if (k === "grinder"){
+        if (vals.grinder === opt.dataset.v) return;
+        const from = {grinder: vals.grinder, value: vals.grind};
+        vals.grinder = opt.dataset.v;
+        vals.grind = defaultGrind(method, vals.grinder, from);
+        drawFields(); return;
+      }
+      let v = seg.dataset.bool ? opt.dataset.v === "1" : opt.dataset.v;
+      if (!seg.dataset.bool && vals[k] === v) v = null;
+      vals[k] = v;
+      seg.querySelectorAll("[data-v]").forEach(x => x.setAttribute("aria-checked", String(seg.dataset.bool ? (x.dataset.v === "1") === v : x.dataset.v === v)));
+      updateCalc();
+    }
+  });
+  $("#bf-at").addEventListener("change", updateCalc);
+  $("#bf-defs").addEventListener("click", async e => {
+    if (!e.target.closest("#bf-setdef")) return;
+    const p = readParams(); delete p.grinderLabel;
+    try {
+      await setMeta({methodDefaults: {...savedDefaults(), [method]: p}});
+      updateCalc(); toast("Le prossime estrazioni " + methodLabel(method) + " partiranno da questi valori");
+    } catch(err){ toast(errMsg(err)); }
+  });
+  $("#bf-methods").addEventListener("click", e => {
+    const ch = e.target.closest("[data-m]"); if (!ch || ch.dataset.m === method) return;
+    const prev = vals; method = ch.dataset.m;
+    s.el.querySelectorAll("#bf-methods [data-m]").forEach(x => { const on = x.dataset.m === method; x.setAttribute("aria-pressed", on); x.setAttribute("aria-checked", on); });
+    if (METHODS[method]){
+      vals = methodDefaults(method);
+      if (!isNew){ for (const k of fieldsOf(method)) if (prev[k] != null && k !== "grind") vals[k] = prev[k]; }
+      bloomLinked = isNew;
+    }
+    drawPrefill(); drawFields(); drawDefs();
+  });
+  const paintRating = () => s.el.querySelectorAll("#bf-rating [data-r]").forEach(x => x.classList.toggle("on", Number(x.dataset.r) <= rating));
+  paintRating();
+  $("#bf-rating").addEventListener("click", e => { const r = e.target.closest("[data-r]"); if (!r) return; const n = Number(r.dataset.r); rating = rating === n ? 0 : n; paintRating(); });
+
+  const del = $("#bf-del");
+  if (del) del.addEventListener("click", async () => {
+    if (!(await confirmBox("Eliminare questa estrazione?", "Elimina"))) return;
+    try { await retryOnce(() => db.collection("brews").doc(b.id).delete()); s.close(); toast("Estrazione eliminata"); }
+    catch(e){ toast(errMsg(e)); }
+  });
+
+  $("#bf").addEventListener("submit", async e => {
+    e.preventDefault();
+    const btn = $("#bf-save"); btn.disabled = true; btn.textContent = "Salvo…";
+    const atVal = $("#bf-at").value; const at = atVal ? new Date(atVal) : new Date();
+    const data = {
+      coffeeId: coffee.id, method, at: (isNaN(at) ? new Date() : at).toISOString(),
+      params: readParams(), rating, notes: $("#bf-notes").value.trim(),
+      createdAt: b?.createdAt || new Date().toISOString(),
+    };
+    try {
+      const id = b?.id || uid("b");
+      await retryOnce(() => db.collection("brews").doc(id).set(data));
+      s.close(); toast(isNew ? "Estrazione salvata" : "Modifiche salvate");
+    } catch(err){ btn.disabled = false; btn.textContent = isNew?"Salva estrazione":"Salva modifiche"; toast(errMsg(err)); }
+  });
+}
+
+/* ---------- Supabase: archivio, foto ---------- */
+const CACHE_KEY = "community-cache-v1";
+const TABLES = {
+  catalog:  {cols:"id,created_by,data", row:(id, d) => ({id, data:d})},
+  coffees:  {cols:"id,data", row:(id, d) => ({id, catalog_id:d.catalogId, data:d})},
+  brews:    {cols:"id,data", row:(id, d) => ({id, coffee_id:d.coffeeId, data:d})},
+  grinders: {cols:"id,data", row:(id, d) => ({id, data:d})},
+};
+
+function wrapErr(error){
+  const m = String((error && error.message) || "");
+  const st = error && (error.status || error.statusCode);
+  if (error && error.code === "23503") return {code:"in_use", message:m};
+  if (!navigator.onLine || /fetch|network|load failed/i.test(m)) return {code:"unavailable", message:m};
+  if (st == 401 || st == 403 || (error && error.code === "42501")) return {code:"invalid_argument", message:m};
+  if (st == 413) return {code:"too_large", message:m};
+  return {code:"error", message:m};
+}
+const sortBrews = () => S.brews.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+let cacheTimer = null;
+function saveCache(){
+  clearTimeout(cacheTimer);
+  cacheTimer = setTimeout(() => {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({u: me(), catalog:[...S.catalog.values()], bags:[...S.bags.values()], brews:S.brews, grinders:[...S.grinders.values()], profiles:[...S.profiles], counts:[...S.counts]})); } catch {}
+  }, 300);
+}
+function loadCache(){
+  try {
+    const c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+    if (!c || !session || c.u !== me()) return false;
+    S.catalog = new Map(c.catalog.map(x => [x.id, x])); S.bags = new Map(c.bags.map(x => [x.id, x]));
+    S.brews = c.brews; sortBrews(); S.grinders = new Map(c.grinders.map(x => [x.id, x]));
+    S.profiles = new Map(c.profiles || []); S.counts = new Map(c.counts || []);
+    S.loaded = true; return true;
+  } catch { return false; }
+}
+function applyRow(table, id, data, createdBy){
+  if (table === "catalog"){ if (data) S.catalog.set(id, {id, createdBy: createdBy !== undefined ? createdBy : S.catalog.get(id)?.createdBy, ...data}); else S.catalog.delete(id); }
+  else if (table === "coffees"){ if (data) S.bags.set(id, {id, ...data}); else S.bags.delete(id); }
+  else if (table === "grinders"){ if (data) S.grinders.set(id, {id, ...data}); else S.grinders.delete(id); }
+  else { S.brews = S.brews.filter(b => b.id !== id); if (data) S.brews.push({id, ...data}); sortBrews(); }
+  saveCache(); render();
+}
+function localOf(table, id){
+  if (table === "catalog") return S.catalog.get(id);
+  if (table === "coffees") return S.bags.get(id);
+  if (table === "grinders") return S.grinders.get(id);
+  return S.brews.find(b => b.id === id);
+}
+function makeDb(){
+  return { collection(table){ return { doc(id){ return {
+    async set(data){
+      const row = {...TABLES[table].row(id, data), updated_at: new Date().toISOString()};
+      const {error} = await sb.from(table).upsert(row);
+      if (error) throw wrapErr(error);
+      applyRow(table, id, data, table === "catalog" ? (S.catalog.get(id)?.createdBy || me()) : undefined);
+    },
+    async update(part){
+      const cur = localOf(table, id);
+      if (!cur) throw {code:"invalid_argument"};
+      const {id: _i, createdBy: _c, ...rest} = cur;
+      await this.set({...rest, ...part});
+    },
+    async delete(){
+      const {error} = await sb.from(table).delete().eq("id", id);
+      if (error) throw wrapErr(error);
+      applyRow(table, id, null);
+    },
+  }; } }; } };
+}
+function makeAssets(){
+  return {
+    async upload(blob, opts){
+      const type = (opts && opts.type) || blob.type || "image/jpeg";
+      const ext = type === "image/png" ? "png" : type === "image/webp" ? "webp" : type === "image/gif" ? "gif" : "jpg";
+      const path = me() + "/" + uid("p") + "." + ext;
+      const {error} = await sb.storage.from("photos").upload(path, blob, {contentType: type, cacheControl: "31536000", upsert: false});
+      if (error) throw wrapErr(error);
+      return {id: path};
+    },
+    async delete(path){ if (path && path.startsWith(me() + "/")) await sb.storage.from("photos").remove([path]); },
+  };
+}
+async function fetchAll(table, cols){
+  const out = [];
+  for (let from = 0; ; from += 1000){
+    const {data, error} = await sb.from(table).select(cols).range(from, from + 999);
+    if (error) throw wrapErr(error);
+    out.push(...data);
+    if (data.length < 1000) break;
+  }
+  return out;
+}
+async function loadCounts(){
+  try {
+    const {data, error} = await sb.rpc("catalog_counts");
+    if (!error && Array.isArray(data)){ S.counts = new Map(data.map(r => [r.catalog_id, Number(r.members)])); saveCache(); render(); }
+  } catch {}
+}
+let refreshing = false;
+async function refresh(){
+  if (refreshing) return; refreshing = true;
+  try {
+    const [k, c, b, g, p] = await Promise.all([
+      fetchAll("catalog", TABLES.catalog.cols), fetchAll("coffees", "id,data"), fetchAll("brews", "id,data"),
+      fetchAll("grinders", "id,data"), fetchAll("profiles", "id,name"),
+    ]);
+    S.catalog = new Map(k.map(r => [r.id, {id: r.id, createdBy: r.created_by, ...(r.data || {})}]));
+    S.bags = new Map(c.map(r => [r.id, {id: r.id, ...(r.data || {})}]));
+    S.brews = b.map(r => ({id: r.id, ...(r.data || {})})); sortBrews();
+    S.grinders = new Map(g.map(r => [r.id, {id: r.id, ...(r.data || {})}]));
+    S.profiles = new Map(p.map(r => [r.id, r.name || ""]));
+    S.loaded = true; S.offline = false; S.error = null;
+    saveCache();
+    loadCounts();
+  } catch(e){
+    S.offline = true;
+    if (!S.loaded) S.error = "Non riesco a raggiungere l'archivio. Controlla la connessione e riapri l'app.";
+  } finally { refreshing = false; render(); }
+}
+let channel = null;
+function subscribe(){
+  if (channel) return;
+  const onChange = table => p => {
+    if (p.eventType === "DELETE"){ if (p.old && p.old.id) applyRow(table, p.old.id, null); }
+    else if (p.new && p.new.id) applyRow(table, p.new.id, p.new.data, table === "catalog" ? p.new.created_by : undefined);
+  };
+  channel = sb.channel("community");
+  for (const t of Object.keys(TABLES)) channel.on("postgres_changes", {event:"*", schema:"public", table:t}, onChange(t));
+  channel.on("postgres_changes", {event:"*", schema:"public", table:"profiles"}, p => {
+    if (p.new && p.new.id){ S.profiles.set(p.new.id, p.new.name || ""); saveCache(); render(); }
+  });
+  channel.subscribe();
+}
+async function startData(){
+  S.needLogin = false; S.needPassword = false;
+  sb.auth.getUser().then(({data}) => { if (data && data.user && session){ session = {...session, user: data.user}; render(); } }).catch(() => {});
+  db = makeDb(); assets = makeAssets();
+  loadCache(); render();
+  setTimeout(() => { if (!S.loaded){ S.slow = true; render(); } }, 6000);
+  await refresh();
+  subscribe();
+}
+
+/* ---------- accesso ---------- */
+const passInput = (id, ac) => '<input type="password" autocomplete="'+ac+'" id="'+id+'">';
+function renderLogin(){
+  app.innerHTML = '<header class="top"><div><h1>'+APP_TITLE+'</h1><p>La community dei caffè specialty. Accedi con l\'account ricevuto su invito.</p></div></header>' +
+    '<form class="login" id="login" novalidate>' +
+    (S.loginMsg ? '<p class="ok">'+esc(S.loginMsg)+"</p>" : "") +
+    '<div class="field"><label for="lg-email">Email</label><input type="text" inputmode="email" autocomplete="username" autocapitalize="off" id="lg-email"></div>' +
+    '<div class="field"><label for="lg-pass">Password</label>'+passInput("lg-pass", "current-password")+'</div>' +
+    '<p class="err" id="lg-err" hidden></p>' +
+    '<div class="form-foot"><button class="btn primary" type="submit" id="lg-go">Accedi</button><button class="btn ghost" type="button" id="lg-forgot">Password dimenticata?</button></div></form>';
+  const f = document.getElementById("login"), err = document.getElementById("lg-err");
+  const showErr = t => { err.hidden = false; err.textContent = t; };
+  f.addEventListener("submit", async e => {
+    e.preventDefault();
+    const btn = document.getElementById("lg-go");
+    const email = document.getElementById("lg-email").value.trim(), password = document.getElementById("lg-pass").value;
+    if (!email || !password) return showErr("Inserisci email e password.");
+    btn.disabled = true; btn.textContent = "Accesso…"; err.hidden = true;
+    const {data, error} = await sb.auth.signInWithPassword({email, password});
+    if (error){
+      btn.disabled = false; btn.textContent = "Accedi";
+      return showErr(/invalid/i.test(error.message) ? "Email o password non corrette." : "Accesso non riuscito: controlla la connessione e riprova.");
+    }
+    session = data.session; S.loginMsg = null; startData();
+  });
+  document.getElementById("lg-forgot").addEventListener("click", async () => {
+    const email = document.getElementById("lg-email").value.trim();
+    if (!email) return showErr("Scrivi la tua email qui sopra, poi premi di nuovo “Password dimenticata?”.");
+    err.hidden = true;
+    const {error} = await sb.auth.resetPasswordForEmail(email, {redirectTo: location.origin + location.pathname});
+    if (error && /rate|limit/i.test(error.message)) return showErr("Troppe richieste: riprova tra qualche minuto.");
+    if (error) return showErr("Invio non riuscito. Se il problema continua, chiedi all'amministratore di reimpostare la password.");
+    S.loginMsg = "Se l'indirizzo è registrato riceverai un'email con il link per scegliere una nuova password."; renderLogin();
+  });
+}
+function renderSetPassword(){
+  app.innerHTML = '<header class="top"><div><h1>'+APP_TITLE+'</h1><p>Scegli la password che userai per accedere da tutti i dispositivi.</p></div></header>' +
+    '<form class="login" id="setpw" novalidate>' +
+    (session && session.user && session.user.email ? '<p class="small muted" style="margin:0">Account: '+esc(session.user.email)+"</p>" : "") +
+    '<div class="field"><label for="pw1">Nuova password (almeno 8 caratteri)</label>'+passInput("pw1", "new-password")+'</div>' +
+    '<div class="field"><label for="pw2">Ripeti la password</label>'+passInput("pw2", "new-password")+'</div>' +
+    '<p class="err" id="pw-err" hidden></p>' +
+    '<button class="btn primary" type="submit" id="pw-go" style="align-self:flex-start">Salva e continua</button></form>';
+  document.getElementById("setpw").addEventListener("submit", async e => {
+    e.preventDefault();
+    const err = document.getElementById("pw-err"), btn = document.getElementById("pw-go");
+    const a = document.getElementById("pw1").value, b = document.getElementById("pw2").value;
+    const fail = t => { err.hidden = false; err.textContent = t; };
+    if (a.length < 8) return fail("La password deve avere almeno 8 caratteri.");
+    if (a !== b) return fail("Le due password non coincidono.");
+    btn.disabled = true; btn.textContent = "Salvo…"; err.hidden = true;
+    const {error} = await sb.auth.updateUser({password: a});
+    if (error){ btn.disabled = false; btn.textContent = "Salva e continua"; return fail(/weak|short|characters/i.test(error.message) ? "Password troppo debole: allungala o aggiungi numeri e simboli." : "Non riesco a salvare la password. Il link potrebbe essere scaduto: chiedi un nuovo invito."); }
+    toast("Password salvata"); startData();
+  });
+}
+async function logout(){
+  if (!(await confirmBox("Uscire su questo dispositivo? I dati restano salvati online.", "Esci"))) return;
+  try { await sb.auth.signOut(); } catch {}
+  try { localStorage.removeItem(CACHE_KEY); } catch {}
+  if (channel){ sb.removeChannel(channel); channel = null; }
+  session = null; db = null;
+  S.catalog = new Map(); S.bags = new Map(); S.brews = []; S.grinders = new Map(); S.profiles = new Map(); S.counts = new Map();
+  S.loaded = false; S.needLogin = true;
+  go(null);
+}
+
+/* ---------- backup: esporta / importa ---------- */
+const BACKUP_EVERY_DAYS = 14;
+const lastBackup = () => meta().lastBackup || null;
+function backupNudgeHtml(count){
+  if (!count || !session) return "";
+  const lb = lastBackup();
+  const days = lb ? daysBetween(lb, new Date()) : null;
+  if (days != null && days < BACKUP_EVERY_DAYS) return "";
+  const txt = lb ? "Ultimo backup " + (days === 1 ? "ieri" : days + " giorni fa") : "Non hai ancora fatto un backup";
+  return '<div class="nudge" role="status"><span>' + txt + '. L\'archivio online non ha copie automatiche: salvane una sul telefono o nel cloud.</span><button class="btn" data-act="export">Esporta ora</button></div>';
+}
+async function recordBackup(){
+  try { await setMeta({lastBackup: new Date().toISOString()}); } catch {}
+  render();
+}
+function footerHtml(){
+  return '<footer class="foot"><button class="btn" data-act="settings">Impostazioni</button><button class="btn" data-act="export">Esporta backup</button><button class="btn" data-act="import">Importa backup</button><button class="btn" data-act="logout">Esci</button>' +
+    (session ? '<span class="who">Accesso come ' + esc(session.user.email || "") + (myName() ? " (" + esc(myName()) + ")" : "") + (lastBackup() ? " · ultimo backup " + fmtDate(lastBackup()) : "") + "</span>" : "") + "</footer>";
+}
+const blobToDataURL = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
+async function withPhotoData(o){
+  const r = {...o};
+  if (o.photo){ try { const res = await fetch(photoUrl(o.photo)); if (res.ok) r.photoData = await blobToDataURL(await res.blob()); } catch {} }
+  return r;
+}
+async function buildBackup(){
+  const bags = [...S.bags.values()];
+  const catalog = [];
+  for (const id of new Set(bags.map(b => b.catalogId))){ const k = S.catalog.get(id); if (k) catalog.push(await withPhotoData(k)); }
+  return JSON.stringify({app:"diario-caffe-community", version:1, exportedAt:new Date().toISOString(),
+    catalog, coffees:bags, brews:S.brews, grinders:[...S.grinders.values()], methodDefaults: meta().methodDefaults || null});
+}
+const backupName = () => "diario-caffe-community-backup-" + new Date().toISOString().slice(0,10) + ".json";
+async function withBusy(el, label, fn){ const old = el ? el.textContent : ""; if (el){ el.disabled = true; el.textContent = label; } try { return await fn(); } finally { if (el){ el.disabled = false; el.textContent = old; } } }
+async function exportBackup(el){
+  await withBusy(el, "Preparo il file…", async () => {
+    try {
+      const json = await buildBackup(), name = backupName();
+      const file = new File([json], name, {type: "application/json"});
+      if (navigator.canShare && navigator.canShare({files: [file]})){
+        try { await navigator.share({files: [file], title: name}); } catch(e){ if (e && e.name === "AbortError") return; throw e; }
+        await recordBackup(); toast("Backup pronto");
+      } else {
+        const url = URL.createObjectURL(file), a = document.createElement("a");
+        a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+        await recordBackup(); toast("Backup scaricato");
+      }
+    } catch { toast("Esportazione non riuscita. Riprova."); }
+  });
+}
+async function photoFromData(photoData){
+  if (!photoData) return null;
+  try { const blob = await (await fetch(photoData)).blob(); return (await retryOnce(() => assets.upload(blob, {type: blob.type || "image/jpeg"}))).id; }
+  catch { return null; }
+}
+/* Importa un backup di questa app oppure della versione personale del Diario caffè
+   (in quel caso ogni caffè diventa una scheda del catalogo + una confezione in dispensa). */
+function importBackup(){
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = ".json,application/json";
+  inp.addEventListener("change", async () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    let data;
+    try { data = JSON.parse(await f.text()); } catch { toast("Il file non è un backup valido."); return; }
+    const community = data && data.app === "diario-caffe-community", legacy = data && data.app === "diario-caffe";
+    if ((!community && !legacy) || !Array.isArray(data.coffees) || !Array.isArray(data.brews)){ toast("Il file non è un backup del Diario caffè."); return; }
+    const msg = legacy
+      ? "Importare " + data.coffees.length + " caffè e " + data.brews.length + " estrazioni dalla versione personale? I caffè che non sono già nel catalogo diventano nuove schede visibili ai membri; date, pesi, prezzi ed estrazioni restano privati."
+      : "Importare " + data.coffees.length + " confezioni e " + data.brews.length + " estrazioni? Se un elemento è già presente viene sostituito dalla versione del file.";
+    if (!(await confirmBox(msg, "Importa"))) return;
+    toast("Importazione in corso…");
+    try {
+      const now = new Date().toISOString();
+      const grinderRows = [], catalogRows = [], bagRows = [];
+      const newCatalog = new Set();
+      if (community && Array.isArray(data.grinders)){
+        for (const g of data.grinders){ if (!g || !g.id) continue; const {id, ...rest} = g; grinderRows.push({id: String(id), data: rest, updated_at: now}); }
+      }
+      if (community){
+        for (const k of data.catalog || []){
+          if (!k || !k.id || S.catalog.has(k.id)) continue;
+          const {id, photoData, createdBy, ...rest} = k;
+          const photo = photoData ? await photoFromData(photoData) : (rest.photo || null);
+          catalogRows.push({id: String(id), data: {...pick(rest, CATALOG_FIELDS), photo, createdAt: rest.createdAt || now}, updated_at: now});
+          newCatalog.add(String(id));
+        }
+        for (const c of data.coffees){
+          if (!c || !c.id || !c.catalogId || !(S.catalog.has(c.catalogId) || newCatalog.has(c.catalogId))) continue;
+          const {id, ...rest} = c;
+          bagRows.push({id: String(id), catalog_id: rest.catalogId, data: rest, updated_at: now});
+        }
+      } else {
+        const byKey = new Map([...S.catalog.values()].map(k => [norm(k.name) + "|" + norm(k.roaster), k.id]));
+        for (const c of data.coffees){
+          if (!c || !c.id || !c.name) continue;
+          const key = norm(c.name) + "|" + norm(c.roaster);
+          let kid = byKey.get(key);
+          if (!kid){
+            kid = "k" + c.id;
+            if (!S.catalog.has(kid)){
+              const photo = await photoFromData(c.photoData);
+              catalogRows.push({id: kid, data: {...pick(c, CATALOG_FIELDS), photo, createdAt: c.createdAt || now}, updated_at: now});
+            }
+            byKey.set(key, kid);
+          }
+          bagRows.push({id: String(c.id), catalog_id: kid, data: {catalogId: kid, ...pick(c, BAG_FIELDS), createdAt: c.createdAt || now}, updated_at: now});
+        }
+      }
+      /* estrazioni: nella versione personale i macinini erano "pietro" e "g5" */
+      const legacyGrinder = new Map();
+      const ensureGrinder = key => {
+        if (legacyGrinder.has(key)) return legacyGrinder.get(key);
+        const t = GRINDER_TEMPLATES.find(x => x.key === key); if (!t) return null;
+        const found = [...S.grinders.values()].find(g => norm(g.model) === norm(t.model));
+        let g = found;
+        if (!g){ const id = uid("g"); g = {id, brand:t.brand, model:t.model, burrs:t.burrs, min:t.min, max:t.max, step:t.step, createdAt: now}; const {id: _x, ...rest} = g; grinderRows.push({id, data: rest, updated_at: now}); }
+        legacyGrinder.set(key, g); return g;
+      };
+      const okBags = new Set([...bagRows.map(r => r.id), ...S.bags.keys()]);
+      const brewRows = [];
+      for (const b of data.brews){
+        if (!b || !b.id || !okBags.has(String(b.coffeeId))) continue;
+        const {id, ...rest} = b;
+        if (legacy && rest.params && rest.params.grind != null){
+          const g = ensureGrinder(rest.params.grinder || "pietro");
+          rest.params = {...rest.params};
+          if (g){ rest.params.grinder = g.id; rest.params.grinderLabel = grinderLabel(g); }
+        }
+        brewRows.push({id: String(id), coffee_id: String(rest.coffeeId), data: rest, updated_at: now});
+      }
+      const put = async (table, rows) => { for (let i = 0; i < rows.length; i += 200){ const {error} = await sb.from(table).upsert(rows.slice(i, i + 200)); if (error) throw wrapErr(error); } };
+      await put("grinders", grinderRows);
+      await put("catalog", catalogRows);
+      await put("coffees", bagRows);
+      await put("brews", brewRows);
+      if (community && data.methodDefaults && !meta().methodDefaults) await setMeta({methodDefaults: data.methodDefaults}).catch(() => {});
+      await refresh();
+      toast("Importati " + bagRows.length + " caffè (" + catalogRows.length + " nuove schede) e " + brewRows.length + " estrazioni");
+    } catch(e){ toast(errMsg(e)); }
+  });
+  inp.click();
+}
+
+/* ---------- avvio ---------- */
+if ("serviceWorker" in navigator && location.protocol === "https:"){
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && db) refresh(); });
+window.addEventListener("online", () => { if (db) refresh(); });
+window.addEventListener("offline", () => { if (db){ S.offline = true; render(); } });
+/* link ricevuti per email: invito o reimpostazione della password */
+const linkParams = new URLSearchParams(location.hash.slice(1));
+const linkType = linkParams.get("type"), linkError = linkParams.get("error_description") || linkParams.get("error");
+render();
+(async () => {
+  if (!CFG.supabaseUrl || !CFG.supabaseKey || !window.supabase){
+    S.error = "Configurazione mancante: inserisci l'indirizzo e la chiave di Supabase nel file config.js.";
+    render(); return;
+  }
+  sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, {auth: {persistSession: true, autoRefreshToken: true, detectSessionInUrl: true}});
+  const {data} = await sb.auth.getSession();
+  session = data && data.session;
+  sb.auth.onAuthStateChange((evt, s) => { if (s) session = s; if (evt === "PASSWORD_RECOVERY"){ S.needPassword = true; render(); } });
+  if (linkType || linkError) history.replaceState(null, "", location.pathname + location.search);
+  if (!session){
+    S.needLogin = true;
+    if (linkError) S.loginMsg = "Il link non è più valido. Chiedi un nuovo invito, oppure usa “Password dimenticata?”.";
+    render(); return;
+  }
+  if (linkType === "invite" || linkType === "recovery"){ S.needPassword = true; render(); return; }
+  startData();
+})();
+})();
+</script>
+</body>
+</html>

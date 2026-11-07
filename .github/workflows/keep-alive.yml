@@ -1,0 +1,55 @@
+# Tiene attivo il progetto Supabase gratuito, che altrimenti va in pausa dopo 7 giorni senza attività.
+# Ogni giorno fa una piccola richiesta all'archivio (senza leggere dati: senza login le regole non mostrano nulla).
+# Indirizzo e chiave vengono letti da config.js, quindi non c'è niente da configurare qui.
+# Una volta al mese crea anche un commit vuoto, perché GitHub sospende le azioni programmate
+# nei repository pubblici senza attività da 60 giorni.
+name: Tieni attivo Supabase
+
+on:
+  schedule:
+    - cron: "43 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Richiesta all'archivio
+        run: |
+          SUPABASE_URL=$(grep -o 'supabaseUrl: *"[^"]*"' config.js | sed 's/.*"\(.*\)"/\1/')
+          SUPABASE_KEY=$(grep -o 'supabaseKey: *"[^"]*"' config.js | sed 's/.*"\(.*\)"/\1/')
+          if [ -z "$SUPABASE_URL" ] || echo "$SUPABASE_URL$SUPABASE_KEY" | grep -q INSERISCI; then
+            echo "::error::config.js non è ancora configurato con l'indirizzo e la chiave del progetto Supabase."
+            exit 1
+          fi
+          for table in catalog coffees; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" \
+              "$SUPABASE_URL/rest/v1/$table?select=id&limit=1" \
+              -H "apikey: $SUPABASE_KEY")
+            echo "$table: HTTP $code"
+            if [ "$code" != "200" ]; then
+              echo "::error::Supabase ha risposto $code. Il progetto potrebbe essere in pausa: riattivalo dalla dashboard."
+              exit 1
+            fi
+          done
+
+      - name: Crea il commit se l'ultimo ha più di 30 giorni
+        if: github.event_name == 'schedule'
+        run: |
+          last=$(git log -1 --format=%ct)
+          now=$(date +%s)
+          if [ $(( (now - last) / 86400 )) -ge 30 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit --allow-empty -m "Mantieni attive le azioni programmate"
+            git push
+          else
+            echo "Repository attivo di recente: nessun commit necessario."
+          fi

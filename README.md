@@ -1,0 +1,72 @@
+# Diario caffè · Community
+
+Versione condivisa del Diario caffè per una piccola community di appassionati.
+
+- **Catalogo condiviso**: le schede dei caffè (nome, torrefazione, origine, varietà, processo, profilo, note dichiarate, foto)
+  sono visibili a tutti i membri. Chi compra un caffè già catalogato lo aggiunge alla propria dispensa con un tocco.
+  Una scheda la modifica solo chi l'ha creata, e non si può eliminare finché qualcuno la ha in dispensa.
+- **Dati personali privati**: data di tostatura, peso, prezzo, estrazioni, voti e note li vede solo chi li ha inseriti.
+- **Macinini personalizzati**: marca, modello, macine (standard o un nome a scelta), valore minimo, massimo e step minimo.
+- **Predefiniti per metodo**: ognuno può salvare i propri valori di partenza (dose, resa/acqua, temperatura, macinino e macinatura…).
+
+Web app installabile su iPhone, Android e computer, ospitata su GitHub Pages, con i dati su Supabase (piano gratuito).
+
+## Com'è fatta
+
+- `index.html`: tutta l'app.
+- `config.js`: indirizzo e chiave pubblica del progetto Supabase.
+- `sw.js`, `manifest.webmanifest`, `icons/`: installazione nella schermata Home e funzionamento offline (sola lettura).
+- `vendor/`: libreria Supabase (versione 2.117.3), inclusa nel sito così funziona anche offline.
+- `supabase/schema.sql`: tabelle, regole di sicurezza e cartella delle foto.
+- `.github/workflows/keep-alive.yml`: evita che il progetto Supabase gratuito vada in pausa.
+
+## Configurazione (una volta sola)
+
+### 1. Supabase
+
+1. Su [supabase.com](https://supabase.com) crea un **nuovo progetto** (separato da quello personale; il piano gratuito ne permette 2 attivi).
+2. **SQL Editor** → New query → incolla `supabase/schema.sql` → Run.
+3. **Authentication → Sign In / Providers**: disattiva "Allow new users to sign up" (si entra solo su invito).
+4. **Authentication → URL Configuration**: in "Site URL" metti l'indirizzo GitHub Pages
+   (es. `https://alessiolp95.github.io/diario-caffe-community/`) e aggiungilo anche in "Redirect URLs".
+5. **Project Settings → API Keys**: copia l'URL del progetto e la chiave *publishable* dentro `config.js`.
+
+### 2. Email (per inviti e "Password dimenticata?")
+
+Il servizio email incluso in Supabase consegna solo agli indirizzi del team del progetto e pochi messaggi l'ora,
+quindi per gli inviti serve un SMTP proprio. Gratis vanno bene, per esempio, Brevo o Gmail (con una "password per le app").
+Si configura in **Authentication → Emails → SMTP Settings** → Enable custom SMTP.
+
+Se preferisci non configurarlo: crea gli utenti a mano (vedi sotto, opzione B) e comunica tu la password.
+In quel caso "Password dimenticata?" non funziona: la reimposti tu dalla dashboard.
+
+### 3. GitHub Pages
+
+Repository → Settings → Pages → "Deploy from a branch", ramo `main`, cartella `/ (root)`.
+In Actions controlla che l'azione "Tieni attivo Supabase" sia abilitata (puoi lanciarla a mano con "Run workflow").
+
+## Aggiungere un membro
+
+- **A. Con invito via email** (serve l'SMTP): Authentication → Users → Add user → *Send invitation*.
+  Il membro riceve un link, apre l'app e sceglie la sua password.
+- **B. A mano**: Authentication → Users → Add user → *Create new user*, con "Auto Confirm User" attivo.
+  Comunica email e password al membro.
+
+Al primo accesso l'app chiede il nome da mostrare accanto ai caffè aggiunti al catalogo e propone di aggiungere il macinino.
+
+Per togliere un membro: Authentication → Users → elimina l'utente. Le sue confezioni ed estrazioni vengono cancellate;
+le schede che aveva creato restano nel catalogo (senza autore, modificabili solo dalla dashboard).
+
+## Backup
+
+Il piano gratuito di Supabase non fa copie automatiche. Ogni membro può usare "Esporta backup" in fondo alla libreria
+(file con le sue confezioni, le schede del catalogo collegate con le foto, le estrazioni e i macinini) e "Importa backup".
+"Importa backup" accetta anche i backup della versione personale del Diario caffè: ogni caffè diventa una scheda del catalogo
+(o viene collegato a una scheda già presente con lo stesso nome e torrefazione) più una confezione in dispensa,
+e i macinini Pietro e Hibrew G5 vengono creati in automatico.
+
+## Limiti del piano gratuito
+
+Supabase: 500 MB di database, 1 GB di foto, 5 GB di traffico al mese, 50.000 utenti attivi al mese, pausa dopo 7 giorni
+senza attività (evitata dall'azione di keep-alive). GitHub Pages: sito fino a 1 GB, 100 GB di traffico al mese.
+Le foto vengono ridimensionate a 1400 px prima del caricamento (in genere 150–300 KB l'una).
