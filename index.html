@@ -975,7 +975,7 @@ function grinderSheet(g, onSaved){
       '<input type="text" id="gf-burrname" value="'+esc(custom ? g.burrs : "")+'" placeholder="Nome delle macine, es. SSP Multipurpose"'+(custom ? "" : " hidden")+' style="margin-top:6px"></div>' +
     '<div class="grid2">' +
       numField("gf-min", "Valore minimo *", g.min ?? 0, "Macine chiuse o regolazione più fine") +
-      numField("gf-max", "Valore massimo *", g.max, "Regolazione più grossa") +
+      numField("gf-max", "Valore massimo *", g.max, "Regolazione più grossolana") +
       numField("gf-step", "Step minimo *", g.step, "Di quanto cambia il valore con una tacca o un click (es. 0,2 sul Pietro)") +
     "</div>" +
     (isNew && !S.grinders.size ? "" : '<div class="field"><span class="flabel">Macinino predefinito</span><div class="seg" id="gf-def" data-bool="1" role="radiogroup" aria-label="Macinino predefinito">' +
@@ -1159,7 +1159,7 @@ function controlHtml(k, vals){
       : '<p class="hint">'+esc(opts[0][1])+"</p>";
   }
   const val = v == null ? min : v;
-  const mid = f.type === "grind" ? '<div class="scale"><span>'+fmtNum(min)+' fine</span><span>'+fmtNum(max)+' grossa</span></div>' : "";
+  const mid = f.type === "grind" ? '<div class="scale"><span>'+fmtNum(min)+' fine</span><span>'+fmtNum(max)+' grossolana</span></div>' : "";
   return '<div class="field sl" data-k="'+k+'">' +
     '<div class="sl-head"><label for="'+id+'">'+head+'</label><output class="num" id="'+id+'-out">'+valueOut(k, val)+"</output></div>" + extra +
     '<div class="sl-row"><button type="button" class="step" data-d="-1" aria-label="Diminuisci '+esc(head)+'">−</button>' +
@@ -1190,7 +1190,7 @@ function brewSheet(coffee, b){
     '<div class="prefill" id="bf-defs"></div>' +
     (coffee.tasting ? '<div class="declared"><span class="flabel">Note dichiarate in busta</span><p>'+esc(coffee.tasting)+'</p></div>' : "") +
     '<div class="field"><span class="flabel">Voto</span><div class="rating" id="bf-rating">' + [1,2,3,4,5].map(i => '<button type="button" data-r="'+i+'" aria-label="'+i+' su 5">★</button>').join("") + "</div></div>" +
-    '<div class="field"><label for="bf-notes">Com\'è uscito</label><textarea id="bf-notes" placeholder="Gusto, corpo, acidità, difetti, cosa cambiare la prossima volta…">'+esc(b?.notes||"")+"</textarea></div>" +
+    '<div class="field"><label for="bf-notes">Risultato estrazione</label><textarea id="bf-notes" placeholder="Gusto, corpo, acidità, difetti, cosa cambiare la prossima volta…">'+esc(b?.notes||"")+"</textarea></div>" +
     '<label class="check" for="bf-public"><input type="checkbox" id="bf-public"'+(b && b.public ? " checked" : "")+'><span class="t"><b>Condividi nella Community</b><span class="hint">Gli altri membri vedranno caffè, metodo, parametri, voto e note di questa estrazione.</span></span></label>' +
     '<div class="form-foot">' + (isNew ? "<span></span>" : '<button type="button" class="btn danger" id="bf-del">Elimina</button>') +
     '<button type="submit" class="btn primary" id="bf-save">'+(isNew?"Salva estrazione":"Salva modifiche")+"</button></div></form>";
