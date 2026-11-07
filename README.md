@@ -4,7 +4,7 @@ Versione condivisa del Diario caffè per una piccola community di appassionati.
 
 - **Catalogo condiviso**: le schede dei caffè (nome, torrefazione, origine, varietà, processo, profilo, note dichiarate, foto)
   sono visibili a tutti i membri. Chi compra un caffè già catalogato lo aggiunge alla propria dispensa con un tocco.
-  Una scheda la modifica solo chi l'ha creata, e non si può eliminare finché qualcuno la ha in dispensa.
+  Una scheda la modificano chi l'ha creata e gli amministratori, e non si può eliminare finché qualcuno la ha in dispensa.
 - **Dati personali privati**: data di tostatura, peso, prezzo, estrazioni, voti e note li vede solo chi li ha inseriti.
 - **Macinini personalizzati**: marca, modello, macine (standard o un nome a scelta), valore minimo, massimo e step minimo.
 - **Predefiniti per metodo**: ognuno può salvare i propri valori di partenza (dose, resa/acqua, temperatura, macinino e macinatura…).
@@ -56,6 +56,17 @@ Al primo accesso l'app chiede il nome da mostrare accanto ai caffè aggiunti al 
 
 Per togliere un membro: Authentication → Users → elimina l'utente. Le sue confezioni ed estrazioni vengono cancellate;
 le schede che aveva creato restano nel catalogo (senza autore, modificabili solo dalla dashboard).
+
+## Amministratori
+
+Gli amministratori possono modificare ed eliminare tutte le schede del catalogo (foto comprese), anche quelle create da altri.
+Si nominano solo da Supabase → SQL Editor, mai dall'app:
+
+```sql
+insert into public.admins select id from auth.users where email = 'nome@esempio.it';
+-- per togliere il ruolo:
+delete from public.admins where user_id = (select id from auth.users where email = 'nome@esempio.it');
+```
 
 ## Backup
 

@@ -4,12 +4,15 @@
 --
 -- Cosa è condiviso e cosa no:
 --   catalog   schede dei caffè (nome, torrefazione, origine, foto…): le vedono tutti i membri,
---             le modifica solo chi le ha create.
+--             le modificano chi le ha create e gli amministratori.
 --   coffees   le confezioni nella dispensa di ciascuno (data di tostatura, peso, prezzo, terminato):
 --             private.
 --   brews     le estrazioni: private.
 --   grinders  i macinini di ciascuno: privati.
 --   profiles  il nome con cui ognuno compare nel catalogo: visibile ai membri.
+--   admins    gli amministratori: possono modificare ed eliminare qualsiasi scheda del catalogo
+--             (e la sua foto). Si aggiungono solo da qui, mai dall'app:
+--             insert into public.admins select id from auth.users where email = 'nome@esempio.it';
 
 -- ---------- tabelle ----------
 create table if not exists public.profiles (
@@ -50,6 +53,18 @@ create table if not exists public.grinders (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.admins (
+  user_id uuid primary key references auth.users on delete cascade
+);
+
+-- true se chi fa la richiesta è un amministratore
+create or replace function public.is_admin()
+returns boolean
+language sql stable security definer set search_path = public
+as $$ select exists (select 1 from public.admins where user_id = auth.uid()) $$;
+revoke execute on function public.is_admin() from public, anon;
+grant execute on function public.is_admin() to authenticated;
+
 create index if not exists coffees_catalog_idx on public.coffees (catalog_id);
 create index if not exists coffees_owner_idx on public.coffees (owner);
 create index if not exists brews_coffee_idx on public.brews (coffee_id);
@@ -63,6 +78,12 @@ alter table public.catalog  enable row level security;
 alter table public.coffees  enable row level security;
 alter table public.brews    enable row level security;
 alter table public.grinders enable row level security;
+alter table public.admins   enable row level security;
+
+-- amministratori: ognuno vede solo se lo è lui; nessuna scrittura dall'app
+drop policy if exists "admins: lettura propria" on public.admins;
+create policy "admins: lettura propria" on public.admins
+  for select to authenticated using (user_id = (select auth.uid()));
 
 -- profili: tutti i membri leggono, ognuno scrive solo il proprio
 drop policy if exists "profiles: lettura membri" on public.profiles;
@@ -75,7 +96,7 @@ drop policy if exists "profiles: modifica propria" on public.profiles;
 create policy "profiles: modifica propria" on public.profiles
   for update to authenticated using (id = (select auth.uid())) with check (id = (select auth.uid()));
 
--- catalogo: tutti i membri leggono e aggiungono, modifica ed eliminazione solo a chi ha creato la scheda
+-- catalogo: tutti i membri leggono e aggiungono, modifica ed eliminazione a chi ha creato la scheda e agli amministratori
 drop policy if exists "catalog: lettura membri" on public.catalog;
 create policy "catalog: lettura membri" on public.catalog
   for select to authenticated using (true);
@@ -84,10 +105,12 @@ create policy "catalog: inserimento" on public.catalog
   for insert to authenticated with check (created_by = (select auth.uid()));
 drop policy if exists "catalog: modifica autore" on public.catalog;
 create policy "catalog: modifica autore" on public.catalog
-  for update to authenticated using (created_by = (select auth.uid())) with check (created_by = (select auth.uid()));
+  for update to authenticated
+  using (created_by = (select auth.uid()) or (select public.is_admin()))
+  with check (created_by = (select auth.uid()) or (select public.is_admin()));
 drop policy if exists "catalog: eliminazione autore" on public.catalog;
 create policy "catalog: eliminazione autore" on public.catalog
-  for delete to authenticated using (created_by = (select auth.uid()));
+  for delete to authenticated using (created_by = (select auth.uid()) or (select public.is_admin()));
 
 -- dati personali: ognuno vede e modifica solo i propri
 drop policy if exists "coffees: solo il proprietario" on public.coffees;
@@ -122,7 +145,8 @@ end $$;
 
 -- ---------- foto ----------
 -- Cartella "photos" leggibile tramite link (così le foto del catalogo si vedono da tutti i membri);
--- ognuno carica ed elimina solo nella propria sottocartella.
+-- ognuno carica ed elimina solo nella propria sottocartella; gli amministratori possono eliminare
+-- anche le foto vecchie di schede altrui quando le sostituiscono.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('photos', 'photos', true, 5242880, array['image/jpeg','image/png','image/webp','image/gif'])
 on conflict (id) do update set public = true, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
@@ -130,7 +154,7 @@ on conflict (id) do update set public = true, file_size_limit = excluded.file_si
 drop policy if exists "photos: lettura propria" on storage.objects;
 create policy "photos: lettura propria" on storage.objects
   for select to authenticated
-  using (bucket_id = 'photos' and (storage.foldername(name))[1] = (select auth.uid())::text);
+  using (bucket_id = 'photos' and ((storage.foldername(name))[1] = (select auth.uid())::text or (select public.is_admin())));
 
 drop policy if exists "photos: caricamento" on storage.objects;
 create policy "photos: caricamento" on storage.objects
@@ -140,4 +164,4 @@ create policy "photos: caricamento" on storage.objects
 drop policy if exists "photos: eliminazione" on storage.objects;
 create policy "photos: eliminazione" on storage.objects
   for delete to authenticated
-  using (bucket_id = 'photos' and (storage.foldername(name))[1] = (select auth.uid())::text);
+  using (bucket_id = 'photos' and ((storage.foldername(name))[1] = (select auth.uid())::text or (select public.is_admin())));

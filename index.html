@@ -292,7 +292,7 @@ const BAG_FIELDS = ["roastDate","weight","price","finished","finishedAt"];
 let db = null, assets = null;
 const S = {
   catalog:new Map(), bags:new Map(), brews:[], grinders:new Map(), profiles:new Map(), counts:new Map(),
-  loaded:false, error:null, slow:false, filter:"all",
+  isAdmin:false, loaded:false, error:null, slow:false, filter:"all",
 };
 const app = document.getElementById("app");
 
@@ -352,6 +352,8 @@ function view(bag){
 }
 const brewsOf = id => S.brews.filter(b => b.coffeeId === id);
 const bagsOf = catalogId => [...S.bags.values()].filter(b => b.catalogId === catalogId);
+/* chi ha creato la scheda e gli amministratori possono modificarla */
+const canEdit = k => !!k && (k.createdBy === me() || S.isAdmin);
 const creatorName = k => !k ? "" : k.createdBy && k.createdBy === me() ? "te" : (S.profiles.get(k.createdBy) || "un membro");
 function ratioText(method, p){
   const out = p.yield ?? p.water; if (!p.dose || !out) return "";
@@ -511,7 +513,8 @@ function renderDetail(c){
   const shown = S.filter === "all" ? bs : bs.filter(b => b.method === S.filter);
   const rd = c.roastDate ? daysBetween(c.roastDate, new Date()) : null;
   const k = S.catalog.get(c.catalogId);
-  const mine = k && k.createdBy === me();
+  const mine = canEdit(k);
+  const byAdmin = mine && k.createdBy !== me();
   const members = S.counts.get(c.catalogId) || 0;
   const facts = [
     ["Origine", c.origin], ["Varietà", c.variety], ["Processo", c.process], ["Profilo", c.profile],
@@ -525,7 +528,7 @@ function renderDetail(c){
     "<h1>"+esc(c.name)+"</h1>" + (c.roaster ? '<div class="roaster">'+esc(c.roaster)+"</div>" : "") + "</div>" +
     (facts.length ? '<dl class="facts">' + facts.map(f => "<div><dt>"+f[0]+"</dt><dd>"+esc(f[1])+"</dd></div>").join("") + "</dl>" : "") +
     (c.tasting ? '<p class="tasting">Note dichiarate: '+esc(c.tasting)+"</p>" : "") +
-    (k ? '<p class="byline">Scheda del catalogo creata da '+esc(creatorName(k)) + (members > 1 ? " · comprato da "+members+" membri" : "") + (mine ? "" : ". Solo chi l'ha creata può modificarla.") + "</p>" : "") +
+    (k ? '<p class="byline">Scheda del catalogo creata da '+esc(creatorName(k)) + (members > 1 ? " · comprato da "+members+" membri" : "") + (byAdmin ? ". Puoi modificarla come amministratore." : mine ? "" : ". Solo chi l'ha creata può modificarla.") + "</p>" : "") +
     '<div class="actions"><button class="btn" data-act="edit-bag">Modifica confezione</button>' +
     (mine ? '<button class="btn" data-act="edit-entry">Modifica scheda</button>' : "") +
     '<button class="btn" data-act="toggle-finished">'+(c.finished ? "Rimetti in dispensa" : "Segna come terminato")+"</button></div>" +
@@ -676,12 +679,15 @@ function bagSheet(k, bag){
       (k.roaster ? '<span class="sub">'+esc(k.roaster)+"</span>" : "") +
       ([k.origin, k.variety, k.process].filter(Boolean).length ? '<span class="sub">'+[k.origin, k.variety, k.process].filter(Boolean).map(esc).join(" · ")+"</span>" : "") +
       (k.tasting ? '<span class="by">Note dichiarate: '+esc(k.tasting)+"</span>" : "") + "</div></div>" +
+    (canEdit(k) ? '<button type="button" class="btn small" id="bg-edit-entry" style="align-self:flex-start">Modifica scheda</button>' : "") +
     (already ? '<p class="hint">Hai già questo caffè in dispensa: verrà aggiunta un\'altra confezione.</p>' : "") +
     '<form id="bg" novalidate><span class="flabel">La tua confezione</span>' + bagFieldsHtml(bag) +
     '<div class="form-foot">' + (isNew ? "<span></span>" : '<button type="button" class="btn danger" id="bg-del">Togli dalla dispensa</button>') +
     '<button type="submit" class="btn primary" id="bg-save">'+(isNew ? "Aggiungi alla dispensa" : "Salva")+"</button></div></form>";
   const s = openSheet(isNew ? "Aggiungi alla dispensa" : "Modifica confezione", inner);
   const $ = sel => s.el.querySelector(sel);
+  const ee = $("#bg-edit-entry");
+  if (ee) ee.addEventListener("click", () => { s.close(); entrySheet(k); });
   const del = $("#bg-del");
   if (del) del.addEventListener("click", async () => {
     const n = brewsOf(bag.id).length;
@@ -709,7 +715,7 @@ function bagSheet(k, bag){
 /* Scheda del catalogo: nuova (con la prima confezione) o modifica da parte di chi l'ha creata. */
 function entrySheet(k, opts){
   const isNew = !k; k = k || {name: (opts && opts.name) || ""};
-  if (!isNew && k.createdBy !== me()){ toast("Solo chi ha creato la scheda può modificarla."); return; }
+  if (!isNew && !canEdit(k)){ toast("Solo chi ha creato la scheda può modificarla."); return; }
   const v = key => esc(k[key] ?? "");
   const photoBlock = '<label class="photo-pick" for="cf-photo">' + (k.photo ? '<img src="'+photoUrl(k.photo)+'" alt="">' : '<span>'+beanSvg+'<br>Aggiungi la foto della confezione</span>') +
       '<input type="file" id="cf-photo" accept="image/*"></label>' + (k.photo ? '<button type="button" class="btn ghost small" id="cf-rmphoto">Rimuovi foto</button>' : "");
@@ -727,7 +733,7 @@ function entrySheet(k, opts){
     (isNew ? '<span class="flabel">La tua confezione</span>' + bagFieldsHtml({}) : "") +
     '<div class="form-foot">' + (isNew ? "<span></span>" : '<button type="button" class="btn danger" id="cf-del">Elimina dal catalogo</button>') +
     '<button type="submit" class="btn primary" id="cf-save">'+(isNew ? "Crea e aggiungi" : "Salva")+"</button></div></form>";
-  const s = openSheet(isNew ? "Nuova scheda caffè" : "Modifica scheda", inner);
+  const s = openSheet(isNew ? "Nuova scheda caffè" : "Modifica scheda", (!isNew && k.createdBy !== me() ? '<p class="hint" style="margin-top:-8px">Scheda creata da '+esc(creatorName(k))+': la modifichi come amministratore, le modifiche le vedranno tutti i membri.</p>' : "") + inner);
   const $ = sel => s.el.querySelector(sel);
   let pendingFile = null, removePhoto = false;
   const fileIn = $("#cf-photo");
@@ -890,7 +896,7 @@ function settingsSheet(){
     const saved = savedDefaults();
     const savedKeys = Object.keys(saved).filter(k => METHODS[k] && saved[k]);
     box.innerHTML =
-      '<section class="sec"><h3>Il tuo nome</h3><p class="hint">Gli altri membri lo vedono accanto ai caffè che aggiungi al catalogo.</p>' +
+      '<section class="sec"><h3>Il tuo nome</h3><p class="hint">Gli altri membri lo vedono accanto ai caffè che aggiungi al catalogo.' + (S.isAdmin ? " Sei amministratore: puoi modificare ed eliminare tutte le schede del catalogo, anche quelle create da altri." : "") + '</p>' +
         '<form id="st-name" class="grid2" style="grid-template-columns:1fr auto;align-items:end" novalidate><div class="field"><label for="st-name-in" class="sr">Nome</label><input type="text" id="st-name-in" maxlength="40" value="'+esc(myName())+'" placeholder="es. Alessio"></div>' +
         '<button class="btn primary" type="submit">Salva</button></form></section>' +
       '<section class="sec"><div class="sec-head"><h3>Macinini</h3><button class="btn small" type="button" data-g="new">+ Macinino</button></div>' +
@@ -1154,7 +1160,7 @@ let cacheTimer = null;
 function saveCache(){
   clearTimeout(cacheTimer);
   cacheTimer = setTimeout(() => {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({u: me(), catalog:[...S.catalog.values()], bags:[...S.bags.values()], brews:S.brews, grinders:[...S.grinders.values()], profiles:[...S.profiles], counts:[...S.counts]})); } catch {}
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({u: me(), catalog:[...S.catalog.values()], bags:[...S.bags.values()], brews:S.brews, grinders:[...S.grinders.values()], profiles:[...S.profiles], counts:[...S.counts], isAdmin:S.isAdmin})); } catch {}
   }, 300);
 }
 function loadCache(){
@@ -1163,7 +1169,7 @@ function loadCache(){
     if (!c || !session || c.u !== me()) return false;
     S.catalog = new Map(c.catalog.map(x => [x.id, x])); S.bags = new Map(c.bags.map(x => [x.id, x]));
     S.brews = c.brews; sortBrews(); S.grinders = new Map(c.grinders.map(x => [x.id, x]));
-    S.profiles = new Map(c.profiles || []); S.counts = new Map(c.counts || []);
+    S.profiles = new Map(c.profiles || []); S.counts = new Map(c.counts || []); S.isAdmin = !!c.isAdmin;
     S.loaded = true; return true;
   } catch { return false; }
 }
@@ -1211,7 +1217,7 @@ function makeAssets(){
       if (error) throw wrapErr(error);
       return {id: path};
     },
-    async delete(path){ if (path && path.startsWith(me() + "/")) await sb.storage.from("photos").remove([path]); },
+    async delete(path){ if (path && path.includes("/") && (path.startsWith(me() + "/") || S.isAdmin)) await sb.storage.from("photos").remove([path]); },
   };
 }
 async function fetchAll(table, cols){
@@ -1234,15 +1240,17 @@ let refreshing = false;
 async function refresh(){
   if (refreshing) return; refreshing = true;
   try {
-    const [k, c, b, g, p] = await Promise.all([
+    const [k, c, b, g, p, a] = await Promise.all([
       fetchAll("catalog", TABLES.catalog.cols), fetchAll("coffees", "id,data"), fetchAll("brews", "id,data"),
       fetchAll("grinders", "id,data"), fetchAll("profiles", "id,name"),
+      fetchAll("admins", "user_id").catch(() => []),
     ]);
     S.catalog = new Map(k.map(r => [r.id, {id: r.id, createdBy: r.created_by, ...(r.data || {})}]));
     S.bags = new Map(c.map(r => [r.id, {id: r.id, ...(r.data || {})}]));
     S.brews = b.map(r => ({id: r.id, ...(r.data || {})})); sortBrews();
     S.grinders = new Map(g.map(r => [r.id, {id: r.id, ...(r.data || {})}]));
     S.profiles = new Map(p.map(r => [r.id, r.name || ""]));
+    S.isAdmin = a.some(r => r.user_id === me());
     S.loaded = true; S.offline = false; S.error = null;
     saveCache();
     loadCounts();
@@ -1338,7 +1346,7 @@ async function logout(){
   if (channel){ sb.removeChannel(channel); channel = null; }
   session = null; db = null;
   S.catalog = new Map(); S.bags = new Map(); S.brews = []; S.grinders = new Map(); S.profiles = new Map(); S.counts = new Map();
-  S.loaded = false; S.needLogin = true;
+  S.isAdmin = false; S.loaded = false; S.needLogin = true;
   go(null);
 }
 
