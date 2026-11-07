@@ -212,6 +212,19 @@ textarea{min-height:110px;resize:vertical;line-height:1.45}
 .dupes:empty{display:none}
 .byline{font-size:13px;color:var(--muted);margin:0}
 .ok{color:var(--accent);margin:0;font-size:14px}
+.tabs{display:flex;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:4px;align-self:flex-start}
+.tabs button{border:0;background:transparent;border-radius:999px;padding:7px 16px;font-size:15px;font-weight:500;cursor:pointer;color:var(--muted)}
+.tabs button[aria-current="page"]{background:var(--accent);color:var(--accent-ink)}
+.check{display:flex;gap:12px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;cursor:pointer}
+.check input{width:22px;height:22px;margin:1px 0 0;accent-color:var(--accent);flex:none}
+.check .t{display:flex;flex-direction:column;gap:2px}
+.cb-head{display:grid;grid-template-columns:48px 1fr;gap:10px;align-items:center}
+.cb-head .thumb{width:48px;height:48px;border-radius:8px}
+.cb-head .t{display:flex;flex-direction:column;min-width:0}
+.cb-head b{font-weight:600;overflow-wrap:anywhere}
+.brew .by{font-size:13px;color:var(--muted)}
+.pill.pub{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+.share-img{width:100%;border-radius:12px;border:1px solid var(--line);display:block}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 @media (prefers-reduced-motion:no-preference){
   .sheet{animation:up .18s ease-out}
@@ -248,6 +261,7 @@ const FIELDS = {
   bypass:     {label:"di cui bypass", unit:"g", type:"slider", min:0, max:200, step:1},
   temp:       {label:"Temperatura", unit:"°C", type:"slider", min:70, max:100, step:1},
   grind:      {label:"Macinatura", type:"grind"},
+  machine:    {label:"Macchina", type:"machine"},
   tamp:       {label:"Pressatura", type:"bool"},
   paperFilter:{label:"Filtro di carta", type:"bool"},
   bloomWater: {label:"Acqua bloom", unit:"g", type:"slider", min:0, max:150, step:1},
@@ -267,11 +281,11 @@ const FIELDS = {
 };
 const DISPLAY_ORDER = ["dose","yield","water","bypass","temp","grind","tamp","paperFilter","paper","bloomWater","bloomTime","pours","time","preinf","steep","waterStart","heat","pressure","orientation","filter","hours"];
 const METHODS = {
-  espressoClassico: {label:"Espresso classico", fields:["dose","yield","temp","grind"],
+  espressoClassico: {label:"Espresso classico", fields:["machine","dose","yield","temp","grind"],
     defaults:{dose:18, yield:36, temp:95}, ratio:2},
-  espressoModerno:  {label:"Espresso moderno", fields:["dose","yield","temp","grind","tamp","paperFilter"],
+  espressoModerno:  {label:"Espresso moderno", fields:["machine","dose","yield","temp","grind","tamp","paperFilter"],
     defaults:{dose:20, yield:48, temp:95, tamp:true, paperFilter:true}, ratio:2.4},
-  espressoLungo:    {label:"Espresso moderno lungo", fields:["dose","yield","temp","grind","tamp","paperFilter"],
+  espressoLungo:    {label:"Espresso moderno lungo", fields:["machine","dose","yield","temp","grind","tamp","paperFilter"],
     defaults:{dose:17, yield:80, temp:90, tamp:false, paperFilter:true}, ratio:4.7},
   aeropress:        {label:"AeroPress", fields:["dose","water","bypass","temp","grind","time"],
     defaults:{dose:18, water:270, bypass:0, temp:90, time:0}, ratio:15},
@@ -292,6 +306,7 @@ const BAG_FIELDS = ["roastDate","weight","price","finished","finishedAt"];
 let db = null, assets = null;
 const S = {
   catalog:new Map(), bags:new Map(), brews:[], grinders:new Map(), profiles:new Map(), counts:new Map(),
+  machines:new Map(), feed:[], communityFilter:null, cfilter:"all",
   isAdmin:false, loaded:false, error:null, slow:false, filter:"all",
 };
 const app = document.getElementById("app");
@@ -386,6 +401,15 @@ function defaultGrind(method, gid, from){
   if (from && from.value != null) return convertGrind(from, gid);
   return snap((G.min + G.max) / 2, G.min, G.max, G.step);
 }
+/* ---------- macchine espresso ---------- */
+const machineLabel = m => m ? [m.brand, m.model].filter(Boolean).join(" ") : "";
+const machineList = () => [...S.machines.values()].sort((a,b) => (a.createdAt||"").localeCompare(b.createdAt||""));
+function defaultMachineId(){
+  const last = S.brews.find(b => b.params && b.params.machine && S.machines.has(b.params.machine));
+  if (last) return last.params.machine;
+  const l = machineList(); return l.length ? l[0].id : null;
+}
+
 function methodDefaults(method){
   const m = METHODS[method], saved = savedDefaults()[method];
   const v = {...m.defaults, ...(saved || {})};
@@ -393,6 +417,11 @@ function methodDefaults(method){
   const gid = saved && saved.grinder && S.grinders.has(saved.grinder) ? saved.grinder : defaultGrinderId();
   if (gid){ v.grinder = gid; v.grind = defaultGrind(method, gid); } else { delete v.grinder; delete v.grind; }
   if (m.bloomAuto && !(saved && saved.bloomWater != null)) v.bloomWater = Math.round(v.dose * m.bloomAuto);
+  delete v.machineLabel;
+  if (m.fields.includes("machine")){
+    const mid = saved && saved.machine && S.machines.has(saved.machine) ? saved.machine : defaultMachineId();
+    if (mid) v.machine = mid; else delete v.machine;
+  } else delete v.machine;
   return v;
 }
 function methodRatio(method){
@@ -404,6 +433,12 @@ function methodRatio(method){
 /* ---------- routing ---------- */
 function currentId(){ const h = location.hash.slice(1); return h.startsWith("c-") ? h.slice(2) : null; }
 function go(id){ location.hash = id ? "c-" + id : ""; if (!id) history.replaceState(null, "", location.pathname + location.search); render(); }
+const isCommunity = () => location.hash === "#community";
+function goCommunity(catalogId){
+  S.communityFilter = catalogId || null; S.cfilter = "all";
+  if (!isCommunity()) location.hash = "community"; else render();
+  window.scrollTo(0, 0);
+}
 window.addEventListener("hashchange", render);
 
 /* ---------- render ---------- */
@@ -421,6 +456,7 @@ function render(){
       "</p></div></header>";
     return;
   }
+  if (isCommunity()){ renderCommunity(); return; }
   const id = currentId();
   if (id && S.bags.has(id)) renderDetail(view(S.bags.get(id)));
   else renderLibrary();
@@ -447,6 +483,10 @@ function coffeeCard(c){
     '<span class="meta">'+meta.join("")+"</span></div></button>";
 }
 
+const navHtml = active => '<nav class="tabs" aria-label="Sezioni">' +
+  '<button type="button" data-act="home"' + (active === "home" ? ' aria-current="page"' : "") + '>La mia dispensa</button>' +
+  '<button type="button" data-act="community"' + (active === "community" ? ' aria-current="page"' : "") + '>Community</button></nav>';
+
 function nudgesHtml(count){
   let h = "";
   if (!myName()) h += '<div class="nudge" role="status"><span>Scegli il nome che gli altri membri vedranno accanto ai caffè che aggiungi al catalogo.</span><button class="btn" data-act="settings">Imposta</button></div>';
@@ -463,7 +503,7 @@ function renderLibrary(){
   const summary = all.length
     ? active.length + " caffè in dispensa · " + recent + (recent === 1 ? " estrazione" : " estrazioni") + " negli ultimi 30 giorni"
     : S.catalog.size + (S.catalog.size === 1 ? " caffè" : " caffè") + " nel catalogo della community";
-  let html = '<header class="top"><div><h1>'+APP_TITLE+'</h1><p>'+summary+'</p>' + (S.offline ? '<p class="offline">Offline: vedi i dati dell\'ultima sincronizzazione. Le modifiche si salvano solo con la connessione.</p>' : "") + '</div>' +
+  let html = navHtml("home") + '<header class="top"><div><h1>'+APP_TITLE+'</h1><p>'+summary+'</p>' + (S.offline ? '<p class="offline">Offline: vedi i dati dell\'ultima sincronizzazione. Le modifiche si salvano solo con la connessione.</p>' : "") + '</div>' +
     '<button class="btn primary" data-act="new-coffee">+ Caffè</button></header>' + nudgesHtml(all.length);
   html += '<section class="list" aria-label="In dispensa">';
   if (!active.length){
@@ -478,32 +518,105 @@ function renderLibrary(){
   app.innerHTML = html;
 }
 
-function paramText(k, v, p){
+const grinderName = p => { const g = S.grinders.get(p.grinder); return g ? grinderLabel(g) : (p.grinderLabel || ""); };
+const machineName = p => { if (!p.machine) return ""; const m = S.machines.get(p.machine); return m ? machineLabel(m) : (p.machineLabel || ""); };
+function paramRaw(k, v, p){
   const f = FIELDS[k] || {label:k};
-  if (k === "grind"){ const g = S.grinders.get(p.grinder); const l = g ? grinderLabel(g) : (p.grinderLabel || ""); return fmtNum(v) + (l ? " · " + esc(l) : ""); }
+  if (k === "grind"){ const l = grinderName(p); return fmtNum(v) + (l ? " · " + l : ""); }
   if (typeof v === "boolean") return v ? "Sì" : "No";
   if (f.dur) return durFmt(v);
   if (typeof v === "number") return fmtNum(v) + (f.unit ? " " + f.unit : "");
-  return esc(v);
+  return String(v);
 }
-function brewCard(b, coffee){
-  const p = b.params || {};
-  const parts = [];
+const paramText = (k, v, p) => esc(paramRaw(k, v, p));
+/* parametri da mostrare, in ordine: [etichetta, chiave, valore] */
+function brewParams(b){
+  const p = b.params || {}, out = [];
   for (const k of DISPLAY_ORDER){
     const v = p[k];
     if (v == null || v === "") continue;
     if ((k === "time" || k === "bypass") && v === 0) continue;
-    const lbl = k === "bypass" ? "Bypass" : (FIELDS[k]?.label || k);
-    parts.push('<span><span class="lbl">'+esc(lbl)+'</span><b class="num">'+paramText(k, v, p)+"</b></span>");
+    out.push([k === "bypass" ? "Bypass" : (FIELDS[k]?.label || k), k, v]);
   }
   const r = ratioText(b.method, p);
-  if (r) parts.splice(Math.min(2, parts.length), 0, '<span><span class="lbl">Rapporto</span><b class="num">'+r+"</b></span>");
-  const age = coffee && coffee.roastDate ? daysBetween(coffee.roastDate, b.at) : null;
-  return '<button class="brew" data-brew="'+esc(b.id)+'">' +
-    '<div class="row"><span class="method">'+esc(methodLabel(b.method))+(p.dripper ? " · "+esc(p.dripper) : "")+(p.device ? " · "+esc(p.device) : "")+"</span>"+stars(b.rating)+"</div>" +
-    '<div class="when">'+fmtWhen(b.at)+(age != null && age >= 0 ? " · "+age+" gg dalla tostatura" : "")+"</div>" +
+  if (r) out.splice(Math.min(2, out.length), 0, ["Rapporto", "ratio", r]);
+  return out;
+}
+const brewTitle = b => { const p = b.params || {}; return [methodLabel(b.method), machineName(p), p.dripper, p.device].filter(Boolean).join(" · "); };
+/* giorni dalla tostatura: dalla propria confezione, oppure quelli salvati con l'estrazione condivisa */
+function brewAge(b){
+  const bag = b.owner && b.owner !== me() ? null : S.bags.get(b.coffeeId);
+  if (bag && bag.roastDate){ const a = daysBetween(bag.roastDate, b.at); return a != null && a >= 0 ? a : null; }
+  return b.roastDays != null && b.roastDays >= 0 ? b.roastDays : null;
+}
+function brewInner(b){
+  const p = b.params || {};
+  const parts = brewParams(b).map(([lbl, k, v]) => '<span><span class="lbl">'+esc(lbl)+'</span><b class="num">'+(k === "ratio" ? esc(v) : paramText(k, v, p))+"</b></span>");
+  const age = brewAge(b);
+  return '<div class="row"><span class="method">'+esc(brewTitle(b))+"</span>"+stars(b.rating)+"</div>" +
+    '<div class="when">'+fmtWhen(b.at)+(age != null ? " · "+age+" gg dalla tostatura" : "")+"</div>" +
     (parts.length ? '<div class="params">'+parts.join("")+"</div>" : "") +
-    (b.notes ? '<p class="notes">'+esc(b.notes)+"</p>" : "") + "</button>";
+    (b.notes ? '<p class="notes">'+esc(b.notes)+"</p>" : "");
+}
+function brewCard(b){
+  return '<button class="brew" data-brew="'+esc(b.id)+'">' + brewInner(b) +
+    (b.public ? '<span><span class="pill pub">Nella Community</span></span>' : "") + "</button>";
+}
+
+/* ---------- Community ---------- */
+const brewCatalogId = b => b.catalogId || (S.bags.get(b.coffeeId) || {}).catalogId || null;
+const brewAuthor = b => !b.owner || b.owner === me() ? (myName() || "Tu") : (S.profiles.get(b.owner) || "Un membro");
+function communityBrews(){
+  return [...S.feed, ...S.brews.filter(b => b.public).map(b => ({...b, owner: me()}))]
+    .sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+}
+function communityCard(b){
+  const k = S.catalog.get(brewCatalogId(b)) || {name:"Caffè"};
+  return '<button class="brew" data-cbrew="'+esc(b.id)+'">' +
+    '<div class="cb-head">' + thumbHtml(k.photo) + '<span class="t"><b>'+esc(k.name)+"</b>"+(k.roaster ? '<span class="small muted">'+esc(k.roaster)+"</span>" : "")+"</span></div>" +
+    brewInner(b) + '<span class="by">di '+esc(b.owner === me() ? "te" : brewAuthor(b))+"</span></button>";
+}
+function renderCommunity(){
+  let list = communityBrews();
+  const f = S.communityFilter, fk = f && S.catalog.get(f);
+  if (f) list = list.filter(b => brewCatalogId(b) === f);
+  const methods = [...new Set(list.map(b => b.method))];
+  if (S.cfilter !== "all" && !methods.includes(S.cfilter)) S.cfilter = "all";
+  const shown = S.cfilter === "all" ? list : list.filter(b => b.method === S.cfilter);
+  let html = navHtml("community") + '<header class="top"><div><h1>Community</h1><p>Le estrazioni che i membri hanno scelto di condividere.</p></div></header>';
+  if (fk) html += '<div class="chips"><button class="chip" aria-pressed="true" data-act="community-all">'+esc(fk.name)+' ✕</button></div>';
+  if (methods.length > 1){
+    html += '<div class="chips" role="group" aria-label="Filtra per metodo">' +
+      '<button class="chip" data-cfilter="all" aria-pressed="'+(S.cfilter==="all")+'">Tutte</button>' +
+      methods.map(k => '<button class="chip" data-cfilter="'+esc(k)+'" aria-pressed="'+(S.cfilter===k)+'">'+esc(methodLabel(k))+"</button>").join("") + "</div>";
+  }
+  html += '<section class="list" aria-label="Estrazioni della community">';
+  html += shown.length ? shown.map(communityCard).join("")
+    : '<div class="empty"><p>' + (f ? "Nessuno ha ancora condiviso un'estrazione di questo caffè." : "Nessuna estrazione condivisa per ora. Quando salvi un'estrazione, spunta “Condividi nella Community” per mostrarla agli altri membri.") + "</p></div>";
+  html += "</section>" + footerHtml();
+  app.innerHTML = html;
+}
+function communityBrewSheet(b){
+  const k = S.catalog.get(brewCatalogId(b));
+  const mine = b.owner === me();
+  const myBag = k && [...S.bags.values()].find(x => x.catalogId === k.id && !x.finished) || (k && bagsOf(k.id)[0]);
+  const inner = (k ? '<div class="card mini static">' + thumbHtml(k.photo) + '<div class="t"><span class="name">'+esc(k.name)+"</span>" +
+      (k.roaster ? '<span class="sub">'+esc(k.roaster)+"</span>" : "") +
+      ([k.origin, k.process].filter(Boolean).length ? '<span class="sub">'+[k.origin, k.process].filter(Boolean).map(esc).join(" · ")+"</span>" : "") + "</div></div>" : "") +
+    '<div class="brew" style="cursor:default">' + brewInner(b) + '<span class="by">di '+esc(mine ? "te" : brewAuthor(b))+"</span></div>" +
+    '<div class="actions"><button type="button" class="btn primary" data-x="share">Condividi come immagine</button>' +
+    (mine ? '<button type="button" class="btn" data-x="edit">Modifica</button>' : "") +
+    (k && myBag ? '<button type="button" class="btn" data-x="open">Apri nella mia dispensa</button>' : k ? '<button type="button" class="btn" data-x="add">Aggiungi alla dispensa</button>' : "") +
+    "</div>";
+  const s = openSheet("Estrazione di " + (mine ? "te" : brewAuthor(b)), inner);
+  s.el.querySelector(".actions").addEventListener("click", e => {
+    const x = e.target.closest("[data-x]"); if (!x) return;
+    const a = x.dataset.x;
+    if (a === "share") shareBrew(b, x);
+    else if (a === "edit"){ const own = S.brews.find(y => y.id === b.id); const bag = own && S.bags.get(own.coffeeId); if (own && bag){ s.close(); brewSheet(view(bag), own); } }
+    else if (a === "open"){ s.close(); go(myBag.id); }
+    else if (a === "add"){ s.close(); bagSheet(k, null); }
+  });
 }
 
 function renderDetail(c){
@@ -516,6 +629,7 @@ function renderDetail(c){
   const mine = canEdit(k);
   const byAdmin = mine && k.createdBy !== me();
   const members = S.counts.get(c.catalogId) || 0;
+  const shared = communityBrews().filter(b => brewCatalogId(b) === c.catalogId).length;
   const facts = [
     ["Origine", c.origin], ["Varietà", c.variety], ["Processo", c.process], ["Profilo", c.profile],
     ["Tostatura", c.roastDate ? fmtDate(c.roastDate) + (rd != null && rd >= 0 && !c.finished ? " ("+rd+" gg)" : "") : ""],
@@ -531,6 +645,7 @@ function renderDetail(c){
     (k ? '<p class="byline">Scheda del catalogo creata da '+esc(creatorName(k)) + (members > 1 ? " · comprato da "+members+" membri" : "") + (byAdmin ? ". Puoi modificarla come amministratore." : mine ? "" : ". Solo chi l'ha creata può modificarla.") + "</p>" : "") +
     '<div class="actions"><button class="btn" data-act="edit-bag">Modifica confezione</button>' +
     (mine ? '<button class="btn" data-act="edit-entry">Modifica scheda</button>' : "") +
+    (shared ? '<button class="btn" data-act="community-coffee">'+shared+(shared === 1 ? " estrazione" : " estrazioni")+' nella Community</button>' : "") +
     '<button class="btn" data-act="toggle-finished">'+(c.finished ? "Rimetti in dispensa" : "Segna come terminato")+"</button></div>" +
     "</div></article>";
   html += '<section class="list" aria-label="Estrazioni"><div class="sec-head"><h2>Estrazioni <span class="muted num">'+bs.length+'</span></h2>' +
@@ -548,15 +663,20 @@ function renderDetail(c){
 
 /* ---------- click globali ---------- */
 app.addEventListener("click", e => {
-  const el = e.target.closest("[data-open],[data-act],[data-brew],[data-filter]");
+  const el = e.target.closest("[data-open],[data-act],[data-brew],[data-cbrew],[data-filter],[data-cfilter]");
   if (!el) return;
   const id = currentId();
   if (el.dataset.open){ S.filter = "all"; go(el.dataset.open); window.scrollTo(0,0); return; }
   if (el.dataset.filter){ S.filter = el.dataset.filter; render(); return; }
+  if (el.dataset.cfilter){ S.cfilter = el.dataset.cfilter; render(); return; }
+  if (el.dataset.cbrew){ const b = communityBrews().find(x => x.id === el.dataset.cbrew); if (b) communityBrewSheet(b); return; }
   if (el.dataset.brew){ const b = S.brews.find(x => x.id === el.dataset.brew); if (b && S.bags.has(b.coffeeId)) brewSheet(view(S.bags.get(b.coffeeId)), b); return; }
   const act = el.dataset.act;
   const bag = id && S.bags.get(id);
   if (act === "home") go(null);
+  else if (act === "community") goCommunity(null);
+  else if (act === "community-all") goCommunity(null);
+  else if (act === "community-coffee" && bag) goCommunity(bag.catalogId);
   else if (act === "new-coffee") catalogSheet();
   else if (act === "edit-bag" && bag) bagSheet(S.catalog.get(bag.catalogId), bag);
   else if (act === "edit-entry" && bag) entrySheet(S.catalog.get(bag.catalogId));
@@ -887,6 +1007,39 @@ function grinderSheet(g, onSaved){
   });
 }
 
+/* ---------- macchine espresso ---------- */
+function machineSheet(m, onSaved){
+  const isNew = !m; m = m || {};
+  const inner = '<form id="mf" novalidate><div class="grid2">' +
+      '<div class="field"><label for="mf-brand">Marca</label><input type="text" id="mf-brand" value="'+esc(m.brand || "")+'" placeholder="es. Lelit"></div>' +
+      '<div class="field"><label for="mf-model">Modello *</label><input type="text" id="mf-model" value="'+esc(m.model || "")+'" placeholder="es. Bianca V3"></div>' +
+    "</div>" +
+    '<p class="err" id="mf-err" hidden style="color:var(--danger);margin:0;font-size:14px"></p>' +
+    '<div class="form-foot">' + (isNew ? "<span></span>" : '<button type="button" class="btn danger" id="mf-del">Elimina macchina</button>') +
+    '<button type="submit" class="btn primary" id="mf-save">'+(isNew ? "Aggiungi" : "Salva")+"</button></div></form>";
+  const s = openSheet(isNew ? "Nuova macchina espresso" : "Modifica macchina", inner);
+  const $ = sel => s.el.querySelector(sel);
+  if (isNew) setTimeout(() => $("#mf-brand").focus(), 50);
+  const del = $("#mf-del");
+  if (del) del.addEventListener("click", async () => {
+    if (!(await confirmBox("Eliminare “"+machineLabel(m)+"”? Le estrazioni già salvate mantengono il nome della macchina.", "Elimina"))) return;
+    try { await retryOnce(() => db.collection("machines").doc(m.id).delete()); s.close(); toast("Macchina eliminata"); if (onSaved) onSaved(null); }
+    catch(e){ toast(errMsg(e)); }
+  });
+  $("#mf").addEventListener("submit", async e => {
+    e.preventDefault();
+    const brand = $("#mf-brand").value.trim(), model = $("#mf-model").value.trim();
+    if (!model){ const err = $("#mf-err"); err.hidden = false; err.textContent = "Scrivi il modello."; $("#mf-model").focus(); return; }
+    const btn = $("#mf-save"); btn.disabled = true; btn.textContent = "Salvo…";
+    try {
+      const id = m.id || uid("m");
+      await retryOnce(() => db.collection("machines").doc(id).set({brand, model, createdAt: m.createdAt || new Date().toISOString()}));
+      s.close(); render(); toast(isNew ? "Macchina aggiunta" : "Macchina aggiornata");
+      if (onSaved) onSaved(S.machines.get(id));
+    } catch(e2){ btn.disabled = false; btn.textContent = isNew ? "Aggiungi" : "Salva"; toast(errMsg(e2)); }
+  });
+}
+
 /* ---------- impostazioni ---------- */
 function settingsSheet(){
   const s = openSheet("Impostazioni", '<div id="st" style="display:flex;flex-direction:column;gap:16px"></div>');
@@ -902,6 +1055,9 @@ function settingsSheet(){
       '<section class="sec"><div class="sec-head"><h3>Macinini</h3><button class="btn small" type="button" data-g="new">+ Macinino</button></div>' +
         (S.grinders.size ? grinderList().map(g => '<button class="item" type="button" data-g="'+esc(g.id)+'"><span class="t"><b>'+esc(grinderLabel(g))+'</b><span class="small muted num">'+fmtNum(g.min)+" – "+fmtNum(g.max)+" · step "+fmtNum(g.step)+"</span></span>"+(g.id === defId ? '<span class="pill fresh">predefinito</span>' : "")+"</button>").join("")
           : '<p class="hint">Nessun macinino. Aggiungine uno per registrare la macinatura.</p>') + "</section>" +
+      '<section class="sec"><div class="sec-head"><h3>Macchine espresso</h3><button class="btn small" type="button" data-m="new">+ Macchina</button></div>' +
+        (S.machines.size ? machineList().map(m => '<button class="item" type="button" data-m="'+esc(m.id)+'"><span class="t"><b>'+esc(machineLabel(m))+"</b></span></button>").join("")
+          : '<p class="hint">Nessuna macchina. Si sceglie nelle estrazioni espresso.</p>') + "</section>" +
       '<section class="sec"><h3>Predefiniti dei metodi</h3><p class="hint">Nel modulo di una nuova estrazione, “Salva come predefiniti” fa partire quel metodo dai valori scelti.</p>' +
         (savedKeys.length ? savedKeys.map(k => { const p = saved[k]; const out = p.yield ?? p.water; const g = S.grinders.get(p.grinder);
           return '<div class="item static"><span class="t"><b>'+esc(methodLabel(k))+'</b><span class="small muted num">'+[p.dose != null ? fmtNum(p.dose)+" g" : "", out != null ? "→ "+fmtNum(out)+" g" : "", p.temp != null ? fmtNum(p.temp)+" °C" : "", p.grind != null ? "macinatura "+fmtNum(p.grind)+(g ? " ("+esc(grinderLabel(g))+")" : "") : ""].filter(Boolean).join(" · ")+"</span></span>" +
@@ -920,6 +1076,8 @@ function settingsSheet(){
   box.addEventListener("click", async e => {
     const g = e.target.closest("[data-g]");
     if (g){ grinderSheet(g.dataset.g === "new" ? null : S.grinders.get(g.dataset.g), () => draw()); return; }
+    const mc = e.target.closest("[data-m]");
+    if (mc){ machineSheet(mc.dataset.m === "new" ? null : S.machines.get(mc.dataset.m), () => draw()); return; }
     const r = e.target.closest("[data-reset]");
     if (r){
       const all = {...savedDefaults()}; delete all[r.dataset.reset];
@@ -941,6 +1099,14 @@ function controlHtml(k, vals){
   if (f.type === "choice"){
     return '<div class="field"><span class="flabel">'+f.label+'</span><div class="seg" data-k="'+k+'" role="radiogroup" aria-label="'+f.label+'">' +
       f.options.map(o => '<button type="button" role="radio" data-v="'+esc(o)+'" aria-checked="'+(v===o)+'">'+esc(o)+"</button>").join("") + "</div></div>";
+  }
+  if (f.type === "machine"){
+    const opts = machineList().map(m => [m.id, machineLabel(m)]);
+    if (v && !S.machines.has(v)) opts.push([v, vals.machineLabel || "Macchina eliminata"]);
+    if (!opts.length) return '<div class="field"><span class="flabel">Macchina</span><p class="hint">Aggiungi la tua macchina espresso per registrarla nelle estrazioni.</p>' +
+      '<button type="button" class="btn small" data-addmachine style="align-self:flex-start">+ Macchina</button></div>';
+    return '<div class="field"><span class="flabel">Macchina</span><div class="seg" data-k="machine" role="radiogroup" aria-label="Macchina">' +
+      opts.map(([mk, l]) => '<button type="button" role="radio" data-v="'+esc(mk)+'" aria-checked="'+(v===mk)+'">'+esc(l)+"</button>").join("") + "</div></div>";
   }
   if (f.type === "bool"){
     return '<div class="field"><span class="flabel">'+f.label+'</span><div class="seg" data-k="'+k+'" data-bool="1" role="radiogroup" aria-label="'+f.label+'">' +
@@ -983,6 +1149,7 @@ function brewSheet(coffee, b){
 
   const inner = '<form id="bf" novalidate>' +
     '<p class="hint" style="margin-top:-8px">'+esc(coffee.name)+(coffee.roaster?" · "+esc(coffee.roaster):"")+"</p>" +
+    (isNew ? "" : '<button type="button" class="btn small" id="bf-share" style="align-self:flex-start">Condividi come immagine</button>') +
     '<div class="field"><span class="flabel">Metodo</span><div class="chips" role="radiogroup" id="bf-methods">' +
       methodKeys.map(k => '<button type="button" class="chip" role="radio" data-m="'+esc(k)+'" aria-pressed="'+(k===method)+'" aria-checked="'+(k===method)+'">'+esc(methodLabel(k))+"</button>").join("") +
     "</div></div>" +
@@ -994,12 +1161,13 @@ function brewSheet(coffee, b){
     (coffee.tasting ? '<div class="declared"><span class="flabel">Note dichiarate in busta</span><p>'+esc(coffee.tasting)+'</p></div>' : "") +
     '<div class="field"><span class="flabel">Voto</span><div class="rating" id="bf-rating">' + [1,2,3,4,5].map(i => '<button type="button" data-r="'+i+'" aria-label="'+i+' su 5">★</button>').join("") + "</div></div>" +
     '<div class="field"><label for="bf-notes">Com\'è uscito</label><textarea id="bf-notes" placeholder="Gusto, corpo, acidità, difetti, cosa cambiare la prossima volta…">'+esc(b?.notes||"")+"</textarea></div>" +
+    '<label class="check" for="bf-public"><input type="checkbox" id="bf-public"'+(b && b.public ? " checked" : "")+'><span class="t"><b>Condividi nella Community</b><span class="hint">Gli altri membri vedranno caffè, metodo, parametri, voto e note di questa estrazione.</span></span></label>' +
     '<div class="form-foot">' + (isNew ? "<span></span>" : '<button type="button" class="btn danger" id="bf-del">Elimina</button>') +
     '<button type="submit" class="btn primary" id="bf-save">'+(isNew?"Salva estrazione":"Salva modifiche")+"</button></div></form>";
   const s = openSheet(isNew ? "Nuova estrazione" : "Modifica estrazione", inner);
   const $ = sel => s.el.querySelector(sel);
 
-  function fieldsOf(m){ return METHODS[m] ? METHODS[m].fields : Object.keys(vals).filter(k => k !== "grinder" && k !== "grinderLabel" && FIELDS[k]); }
+  function fieldsOf(m){ return METHODS[m] ? METHODS[m].fields : Object.keys(vals).filter(k => k !== "grinder" && k !== "grinderLabel" && k !== "machineLabel" && FIELDS[k]); }
   function readParams(){
     const p = {};
     for (const k of fieldsOf(method)){ if (vals[k] != null && vals[k] !== "") p[k] = vals[k]; }
@@ -1007,6 +1175,7 @@ function brewSheet(coffee, b){
       p.grinder = vals.grinder;
       p.grinderLabel = grinderLabel(S.grinders.get(vals.grinder)) || vals.grinderLabel || "";
     } else delete p.grind;
+    if (p.machine) p.machineLabel = machineLabel(S.machines.get(p.machine)) || vals.machineLabel || "";
     return p;
   }
   function updateCalc(){
@@ -1060,6 +1229,10 @@ function brewSheet(coffee, b){
     setVal(k, Number(r.value), true);
   });
   fieldsEl.addEventListener("click", e => {
+    if (e.target.closest("[data-addmachine]")){
+      machineSheet(null, m => { if (!m) return; vals.machine = m.id; drawFields(); });
+      return;
+    }
     if (e.target.closest("[data-addgrinder]")){
       grinderSheet(null, g => { if (!g) return; vals.grinder = g.id; vals.grind = defaultGrind(method, g.id); drawFields(); });
       return;
@@ -1092,7 +1265,7 @@ function brewSheet(coffee, b){
   $("#bf-at").addEventListener("change", updateCalc);
   $("#bf-defs").addEventListener("click", async e => {
     if (!e.target.closest("#bf-setdef")) return;
-    const p = readParams(); delete p.grinderLabel;
+    const p = readParams(); delete p.grinderLabel; delete p.machineLabel;
     try {
       await setMeta({methodDefaults: {...savedDefaults(), [method]: p}});
       updateCalc(); toast("Le prossime estrazioni " + methodLabel(method) + " partiranno da questi valori");
@@ -1113,9 +1286,11 @@ function brewSheet(coffee, b){
   paintRating();
   $("#bf-rating").addEventListener("click", e => { const r = e.target.closest("[data-r]"); if (!r) return; const n = Number(r.dataset.r); rating = rating === n ? 0 : n; paintRating(); });
 
+  const sh = $("#bf-share");
+  if (sh) sh.addEventListener("click", () => shareBrew(b, sh));
   const del = $("#bf-del");
   if (del) del.addEventListener("click", async () => {
-    if (!(await confirmBox("Eliminare questa estrazione?", "Elimina"))) return;
+    if (!(await confirmBox("Eliminare questa estrazione?" + (b.public ? " Sparirà anche dalla Community." : ""), "Elimina"))) return;
     try { await retryOnce(() => db.collection("brews").doc(b.id).delete()); s.close(); toast("Estrazione eliminata"); }
     catch(e){ toast(errMsg(e)); }
   });
@@ -1128,12 +1303,166 @@ function brewSheet(coffee, b){
       coffeeId: coffee.id, method, at: (isNaN(at) ? new Date() : at).toISOString(),
       params: readParams(), rating, notes: $("#bf-notes").value.trim(),
       createdAt: b?.createdAt || new Date().toISOString(),
+      /* per la Community: gli altri non vedono la confezione, quindi scheda e giorni dalla tostatura si salvano qui */
+      catalogId: coffee.catalogId, public: $("#bf-public").checked,
     };
+    const age = coffee.roastDate ? daysBetween(coffee.roastDate, data.at) : null;
+    data.roastDays = age != null && age >= 0 ? age : null;
     try {
       const id = b?.id || uid("b");
       await retryOnce(() => db.collection("brews").doc(id).set(data));
-      s.close(); toast(isNew ? "Estrazione salvata" : "Modifiche salvate");
+      s.close(); toast(data.public ? (isNew ? "Estrazione salvata e condivisa nella Community" : "Modifiche salvate e condivise nella Community") : (isNew ? "Estrazione salvata" : "Modifiche salvate"));
     } catch(err){ btn.disabled = false; btn.textContent = isNew?"Salva estrazione":"Salva modifiche"; toast(errMsg(err)); }
+  });
+}
+
+/* ---------- estrazione come immagine ---------- */
+function loadImg(src){
+  return new Promise(res => {
+    if (!src) return res(null);
+    const im = new Image(); im.crossOrigin = "anonymous";
+    const t = setTimeout(() => res(null), 6000);
+    im.onload = () => { clearTimeout(t); res(im); };
+    im.onerror = () => { clearTimeout(t); res(null); };
+    /* parametro in più: evita la copia in cache senza permessi, che renderebbe la foto inutilizzabile nell'immagine */
+    im.src = src + (src.includes("?") ? "&" : "?") + "share=1";
+  });
+}
+function wrapLines(x, text, maxW, maxLines){
+  const out = [];
+  for (const para of String(text).split(/\n+/)){
+    let line = "";
+    for (const w of para.split(/\s+/).filter(Boolean)){
+      const t = line ? line + " " + w : w;
+      if (x.measureText(t).width <= maxW || !line) line = t; else { out.push(line); line = w; }
+    }
+    if (line) out.push(line);
+  }
+  if (out.length > maxLines){
+    const cut = out.slice(0, maxLines);
+    let last = cut[maxLines - 1];
+    while (last && x.measureText(last + "…").width > maxW) last = last.slice(0, -1);
+    cut[maxLines - 1] = last.replace(/[\s,.;:]+$/, "") + "…";
+    return cut;
+  }
+  return out;
+}
+function starPath(x, cx, cy, r){
+  x.beginPath();
+  for (let i = 0; i < 10; i++){
+    const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r;
+    x.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr);
+  }
+  x.closePath();
+}
+function roundRect(x, X, Y, w, h, r){ x.beginPath(); x.roundRect ? x.roundRect(X, Y, w, h, r) : x.rect(X, Y, w, h); }
+async function brewImage(b){
+  const k = S.catalog.get(brewCatalogId(b)) || {name: "Caffè"};
+  const p = b.params || {};
+  const W = 1080, H = 1350, M = 72;
+  const C = {bg:"#f2f1ec", card:"#ffffff", ink:"#1f1b18", muted:"#6b645c", line:"#e0dcd4", accent:"#a3254a", cream:"#f2e6d0", star:"#b9792c"};
+  const DISP = '"Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif', BODY = '"IBM Plex Sans", "Helvetica Neue", Arial, sans-serif', MONO = '"IBM Plex Mono", Menlo, monospace';
+  try { await Promise.all(['700 60px "Bricolage Grotesque"', '400 30px "IBM Plex Sans"', '500 30px "IBM Plex Sans"', '500 40px "IBM Plex Mono"'].map(f => document.fonts.load(f))); } catch {}
+  const photo = k.photo ? await loadImg(photoUrl(k.photo)) : null;
+  const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+  const x = cv.getContext("2d");
+  x.fillStyle = C.bg; x.fillRect(0, 0, W, H);
+  /* intestazione */
+  x.fillStyle = C.accent; x.fillRect(0, 0, W, 110);
+  x.fillStyle = C.cream; x.font = "500 30px " + BODY; x.textBaseline = "middle";
+  x.fillText("DIARIO CAFFÈ · COMMUNITY", M, 56);
+  x.textAlign = "right"; x.fillText(fmtDate(b.at), W - M, 56); x.textAlign = "left";
+  /* caffè */
+  let y = 160;
+  const ph = 300;
+  let tx = M;
+  if (photo){
+    x.save(); roundRect(x, M, y, ph, ph, 28); x.clip();
+    x.fillStyle = C.card; x.fillRect(M, y, ph, ph);
+    const sc = Math.max(ph / photo.naturalWidth, ph / photo.naturalHeight);
+    const w = photo.naturalWidth * sc, h = photo.naturalHeight * sc;
+    x.drawImage(photo, M + (ph - w) / 2, y + (ph - h) / 2, w, h);
+    x.restore();
+    tx = M + ph + 44;
+  }
+  const tw = W - M - tx;
+  x.textBaseline = "alphabetic"; x.fillStyle = C.ink; x.font = "700 62px " + DISP;
+  let ty = y + 58;
+  for (const l of wrapLines(x, k.name, tw, photo ? 3 : 2)){ x.fillText(l, tx, ty); ty += 68; }
+  x.font = "400 36px " + BODY; x.fillStyle = C.muted;
+  if (k.roaster){ ty += 4; x.fillText(wrapLines(x, k.roaster, tw, 1)[0], tx, ty); ty += 46; }
+  const orig = [k.origin, k.process].filter(Boolean).join(" · ");
+  if (orig){ x.font = "400 30px " + BODY; x.fillText(wrapLines(x, orig, tw, 1)[0], tx, ty); ty += 40; }
+  y = Math.max(y + (photo ? ph : 0), ty) + 50;
+  /* metodo e voto */
+  x.fillStyle = C.ink; x.font = "700 46px " + DISP;
+  const stW = b.rating ? 5 * 46 : 0;
+  x.fillText(wrapLines(x, brewTitle(b), W - 2 * M - stW - 20, 1)[0], M, y);
+  if (b.rating){
+    for (let i = 0; i < 5; i++){ starPath(x, W - M - stW + 23 + i * 46, y - 16, 20); x.fillStyle = i < b.rating ? C.star : C.line; x.fill(); }
+  }
+  const age = brewAge(b);
+  y += 46; x.font = "400 30px " + BODY; x.fillStyle = C.muted;
+  x.fillText(fmtWhen(b.at) + (age != null ? " · " + age + " gg dalla tostatura" : ""), M, y);
+  /* parametri */
+  y += 40;
+  const items = brewParams(b).map(([lbl, key, v]) => {
+    if (key === "ratio") return [lbl, v, ""];
+    if (key === "grind") return [lbl, fmtNum(v), grinderName(p)];
+    return [lbl, paramRaw(key, v, p), ""];
+  });
+  const cols = 3, cw = (W - 2 * M) / cols, rowH = 118, rows = Math.ceil(items.length / cols);
+  if (items.length){
+    x.fillStyle = C.card; roundRect(x, M - 8, y, W - 2 * M + 16, rows * rowH + 24, 28); x.fill();
+    x.strokeStyle = C.line; x.lineWidth = 2; x.stroke();
+    items.forEach(([lbl, val, sub], i) => {
+      const cx = M + 24 + (i % cols) * cw, cy = y + 50 + Math.floor(i / cols) * rowH;
+      x.fillStyle = C.muted; x.font = "500 24px " + BODY; x.fillText(lbl.toUpperCase(), cx, cy);
+      x.fillStyle = C.ink; let fs = 42; x.font = "500 " + fs + "px " + MONO;
+      while (fs > 24 && x.measureText(val).width > cw - 34){ fs -= 2; x.font = "500 " + fs + "px " + MONO; }
+      x.fillText(val, cx, cy + 50);
+      if (sub){ x.fillStyle = C.muted; x.font = "400 22px " + BODY; x.fillText(wrapLines(x, sub, cw - 34, 1)[0], cx, cy + 82); }
+    });
+    y += rows * rowH + 24;
+  }
+  /* note */
+  const footY = H - 70;
+  if (b.notes){
+    y += 64;
+    x.font = "italic 400 36px " + BODY; x.fillStyle = C.ink;
+    const maxLines = Math.max(1, Math.floor((footY - 80 - y) / 50) + 1);
+    const lines = wrapLines(x, b.notes, W - 2 * M - 30, maxLines);
+    x.fillStyle = C.accent; x.fillRect(M, y - 34, 6, lines.length * 50 - 4);
+    x.fillStyle = C.ink;
+    lines.forEach((l, i) => x.fillText(l, M + 30, y + i * 50));
+  }
+  /* piede */
+  x.fillStyle = C.muted; x.font = "500 28px " + BODY;
+  x.fillText("di " + brewAuthor(b), M, footY);
+  if (k.tasting){ x.textAlign = "right"; x.font = "400 24px " + BODY; x.fillText(wrapLines(x, "In busta: " + k.tasting, W / 2, 1)[0], W - M, footY); x.textAlign = "left"; }
+  return new Promise((res, rej) => cv.toBlob(bl => bl ? res(bl) : rej(new Error("toBlob")), "image/png"));
+}
+async function shareBrew(b, btn){
+  if (!b) return;
+  const k = S.catalog.get(brewCatalogId(b)) || {name: "caffe"};
+  await withBusy(btn, "Preparo l'immagine…", async () => {
+    let blob;
+    try { blob = await brewImage(b); } catch { toast("Non riesco a creare l'immagine. Riprova."); return; }
+    const name = "estrazione-" + norm(k.name).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) + "-" + String(b.at || "").slice(0, 10) + ".png";
+    const file = new File([blob], name, {type: "image/png"});
+    const url = URL.createObjectURL(blob);
+    const canShare = navigator.canShare && navigator.canShare({files: [file]});
+    const s = openSheet("Condividi estrazione", '<img class="share-img" src="'+url+'" alt="Anteprima dell\'immagine da condividere">' +
+      '<div class="form-foot"><button type="button" class="btn" data-x="save">Salva immagine</button>' +
+      (canShare ? '<button type="button" class="btn primary" data-x="share">Condividi…</button>' : "") + "</div>");
+    s.el.querySelector(".form-foot").addEventListener("click", async e => {
+      const t = e.target.closest("[data-x]"); if (!t) return;
+      if (t.dataset.x === "share"){
+        try { await navigator.share({files: [file], title: k.name}); } catch(err){ if (!err || err.name !== "AbortError") toast("Condivisione non riuscita."); }
+      } else {
+        const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      }
+    });
   });
 }
 
@@ -1142,8 +1471,9 @@ const CACHE_KEY = "community-cache-v1";
 const TABLES = {
   catalog:  {cols:"id,created_by,data", row:(id, d) => ({id, data:d})},
   coffees:  {cols:"id,data", row:(id, d) => ({id, catalog_id:d.catalogId, data:d})},
-  brews:    {cols:"id,data", row:(id, d) => ({id, coffee_id:d.coffeeId, data:d})},
+  brews:    {cols:"id,owner,data", row:(id, d) => ({id, coffee_id:d.coffeeId, is_public:!!d.public, data:d})},
   grinders: {cols:"id,data", row:(id, d) => ({id, data:d})},
+  machines: {cols:"id,data", row:(id, d) => ({id, data:d})},
 };
 
 function wrapErr(error){
@@ -1155,12 +1485,13 @@ function wrapErr(error){
   if (st == 413) return {code:"too_large", message:m};
   return {code:"error", message:m};
 }
-const sortBrews = () => S.brews.sort((a, b) => (b.at || "").localeCompare(a.at || ""));
+const byAt = (a, b) => (b.at || "").localeCompare(a.at || "");
+const sortBrews = () => { S.brews.sort(byAt); S.feed.sort(byAt); };
 let cacheTimer = null;
 function saveCache(){
   clearTimeout(cacheTimer);
   cacheTimer = setTimeout(() => {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({u: me(), catalog:[...S.catalog.values()], bags:[...S.bags.values()], brews:S.brews, grinders:[...S.grinders.values()], profiles:[...S.profiles], counts:[...S.counts], isAdmin:S.isAdmin})); } catch {}
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({u: me(), catalog:[...S.catalog.values()], bags:[...S.bags.values()], brews:S.brews, grinders:[...S.grinders.values()], machines:[...S.machines.values()], feed:S.feed, profiles:[...S.profiles], counts:[...S.counts], isAdmin:S.isAdmin})); } catch {}
   }, 300);
 }
 function loadCache(){
@@ -1170,20 +1501,32 @@ function loadCache(){
     S.catalog = new Map(c.catalog.map(x => [x.id, x])); S.bags = new Map(c.bags.map(x => [x.id, x]));
     S.brews = c.brews; sortBrews(); S.grinders = new Map(c.grinders.map(x => [x.id, x]));
     S.profiles = new Map(c.profiles || []); S.counts = new Map(c.counts || []); S.isAdmin = !!c.isAdmin;
+    S.machines = new Map((c.machines || []).map(x => [x.id, x])); S.feed = c.feed || []; sortBrews();
     S.loaded = true; return true;
   } catch { return false; }
 }
+/* extra: per il catalogo chi l'ha creato, per le estrazioni il proprietario */
 function applyRow(table, id, data, createdBy){
   if (table === "catalog"){ if (data) S.catalog.set(id, {id, createdBy: createdBy !== undefined ? createdBy : S.catalog.get(id)?.createdBy, ...data}); else S.catalog.delete(id); }
   else if (table === "coffees"){ if (data) S.bags.set(id, {id, ...data}); else S.bags.delete(id); }
   else if (table === "grinders"){ if (data) S.grinders.set(id, {id, ...data}); else S.grinders.delete(id); }
-  else { S.brews = S.brews.filter(b => b.id !== id); if (data) S.brews.push({id, ...data}); sortBrews(); }
+  else if (table === "machines"){ if (data) S.machines.set(id, {id, ...data}); else S.machines.delete(id); }
+  else {
+    const owner = createdBy;
+    S.brews = S.brews.filter(b => b.id !== id); S.feed = S.feed.filter(b => b.id !== id);
+    if (data){
+      if (!owner || owner === me()) S.brews.push({id, ...data});
+      else if (data.public) S.feed.push({id, owner, ...data});
+    }
+    sortBrews();
+  }
   saveCache(); render();
 }
 function localOf(table, id){
   if (table === "catalog") return S.catalog.get(id);
   if (table === "coffees") return S.bags.get(id);
   if (table === "grinders") return S.grinders.get(id);
+  if (table === "machines") return S.machines.get(id);
   return S.brews.find(b => b.id === id);
 }
 function makeDb(){
@@ -1192,7 +1535,7 @@ function makeDb(){
       const row = {...TABLES[table].row(id, data), updated_at: new Date().toISOString()};
       const {error} = await sb.from(table).upsert(row);
       if (error) throw wrapErr(error);
-      applyRow(table, id, data, table === "catalog" ? (S.catalog.get(id)?.createdBy || me()) : undefined);
+      applyRow(table, id, data, table === "catalog" ? (S.catalog.get(id)?.createdBy || me()) : table === "brews" ? me() : undefined);
     },
     async update(part){
       const cur = localOf(table, id);
@@ -1240,14 +1583,17 @@ let refreshing = false;
 async function refresh(){
   if (refreshing) return; refreshing = true;
   try {
-    const [k, c, b, g, p, a] = await Promise.all([
-      fetchAll("catalog", TABLES.catalog.cols), fetchAll("coffees", "id,data"), fetchAll("brews", "id,data"),
+    const [k, c, b, g, p, a, m] = await Promise.all([
+      fetchAll("catalog", TABLES.catalog.cols), fetchAll("coffees", "id,data"), fetchAll("brews", TABLES.brews.cols),
       fetchAll("grinders", "id,data"), fetchAll("profiles", "id,name"),
-      fetchAll("admins", "user_id").catch(() => []),
+      fetchAll("admins", "user_id").catch(() => []), fetchAll("machines", "id,data").catch(() => []),
     ]);
     S.catalog = new Map(k.map(r => [r.id, {id: r.id, createdBy: r.created_by, ...(r.data || {})}]));
     S.bags = new Map(c.map(r => [r.id, {id: r.id, ...(r.data || {})}]));
-    S.brews = b.map(r => ({id: r.id, ...(r.data || {})})); sortBrews();
+    S.brews = b.filter(r => !r.owner || r.owner === me()).map(r => ({id: r.id, ...(r.data || {})}));
+    S.feed = b.filter(r => r.owner && r.owner !== me()).map(r => ({id: r.id, owner: r.owner, ...(r.data || {})}));
+    sortBrews();
+    S.machines = new Map(m.map(r => [r.id, {id: r.id, ...(r.data || {})}]));
     S.grinders = new Map(g.map(r => [r.id, {id: r.id, ...(r.data || {})}]));
     S.profiles = new Map(p.map(r => [r.id, r.name || ""]));
     S.isAdmin = a.some(r => r.user_id === me());
@@ -1264,7 +1610,7 @@ function subscribe(){
   if (channel) return;
   const onChange = table => p => {
     if (p.eventType === "DELETE"){ if (p.old && p.old.id) applyRow(table, p.old.id, null); }
-    else if (p.new && p.new.id) applyRow(table, p.new.id, p.new.data, table === "catalog" ? p.new.created_by : undefined);
+    else if (p.new && p.new.id) applyRow(table, p.new.id, p.new.data, table === "catalog" ? p.new.created_by : table === "brews" ? p.new.owner : undefined);
   };
   channel = sb.channel("community");
   for (const t of Object.keys(TABLES)) channel.on("postgres_changes", {event:"*", schema:"public", table:t}, onChange(t));
@@ -1346,6 +1692,7 @@ async function logout(){
   if (channel){ sb.removeChannel(channel); channel = null; }
   session = null; db = null;
   S.catalog = new Map(); S.bags = new Map(); S.brews = []; S.grinders = new Map(); S.profiles = new Map(); S.counts = new Map();
+  S.machines = new Map(); S.feed = []; S.communityFilter = null;
   S.isAdmin = false; S.loaded = false; S.needLogin = true;
   go(null);
 }
@@ -1380,7 +1727,7 @@ async function buildBackup(){
   const catalog = [];
   for (const id of new Set(bags.map(b => b.catalogId))){ const k = S.catalog.get(id); if (k) catalog.push(await withPhotoData(k)); }
   return JSON.stringify({app:"diario-caffe-community", version:1, exportedAt:new Date().toISOString(),
-    catalog, coffees:bags, brews:S.brews, grinders:[...S.grinders.values()], methodDefaults: meta().methodDefaults || null});
+    catalog, coffees:bags, brews:S.brews, grinders:[...S.grinders.values()], machines:[...S.machines.values()], methodDefaults: meta().methodDefaults || null});
 }
 const backupName = () => "diario-caffe-community-backup-" + new Date().toISOString().slice(0,10) + ".json";
 async function withBusy(el, label, fn){ const old = el ? el.textContent : ""; if (el){ el.disabled = true; el.textContent = label; } try { return await fn(); } finally { if (el){ el.disabled = false; el.textContent = old; } } }
@@ -1426,6 +1773,10 @@ function importBackup(){
       const now = new Date().toISOString();
       const grinderRows = [], catalogRows = [], bagRows = [];
       const newCatalog = new Set();
+      const machineRows = [];
+      if (community && Array.isArray(data.machines)){
+        for (const m of data.machines){ if (!m || !m.id) continue; const {id, ...rest} = m; machineRows.push({id: String(id), data: rest, updated_at: now}); }
+      }
       if (community && Array.isArray(data.grinders)){
         for (const g of data.grinders){ if (!g || !g.id) continue; const {id, ...rest} = g; grinderRows.push({id: String(id), data: rest, updated_at: now}); }
       }
@@ -1479,10 +1830,11 @@ function importBackup(){
           rest.params = {...rest.params};
           if (g){ rest.params.grinder = g.id; rest.params.grinderLabel = grinderLabel(g); }
         }
-        brewRows.push({id: String(id), coffee_id: String(rest.coffeeId), data: rest, updated_at: now});
+        brewRows.push({id: String(id), coffee_id: String(rest.coffeeId), is_public: !!rest.public, data: rest, updated_at: now});
       }
       const put = async (table, rows) => { for (let i = 0; i < rows.length; i += 200){ const {error} = await sb.from(table).upsert(rows.slice(i, i + 200)); if (error) throw wrapErr(error); } };
       await put("grinders", grinderRows);
+      if (machineRows.length) await put("machines", machineRows);
       await put("catalog", catalogRows);
       await put("coffees", bagRows);
       await put("brews", brewRows);

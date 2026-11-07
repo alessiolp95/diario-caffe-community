@@ -5,9 +5,16 @@ Versione condivisa del Diario caffè per una piccola community di appassionati.
 - **Catalogo condiviso**: le schede dei caffè (nome, torrefazione, origine, varietà, processo, profilo, note dichiarate, foto)
   sono visibili a tutti i membri. Chi compra un caffè già catalogato lo aggiunge alla propria dispensa con un tocco.
   Una scheda la modificano chi l'ha creata e gli amministratori, e non si può eliminare finché qualcuno la ha in dispensa.
-- **Dati personali privati**: data di tostatura, peso, prezzo, estrazioni, voti e note li vede solo chi li ha inseriti.
+- **Dati personali privati**: data di tostatura, peso, prezzo, macinini e macchine li vede solo chi li ha inseriti;
+  le estrazioni anche, salvo quelle che si sceglie di condividere nella Community.
 - **Macinini personalizzati**: marca, modello, macine (standard o un nome a scelta), valore minimo, massimo e step minimo.
 - **Predefiniti per metodo**: ognuno può salvare i propri valori di partenza (dose, resa/acqua, temperatura, macinino e macinatura…).
+- **Macchine espresso**: ognuno registra le proprie (marca facoltativa, modello) e le sceglie negli espressi.
+- **Community**: salvando un'estrazione si può spuntare "Condividi nella Community" (disattivato di default).
+  Le estrazioni condivise compaiono nella sezione Community, con autore, caffè, parametri, voto e note;
+  restano modificabili solo da chi le ha fatte.
+- **Condividi come immagine**: ogni estrazione (propria o della Community) diventa un'immagine 1080×1350
+  con caffè, foto della confezione, parametri, voto e commento, da salvare o inviare.
 
 Web app installabile su iPhone, Android e computer, ospitata su GitHub Pages, con i dati su Supabase (piano gratuito).
 

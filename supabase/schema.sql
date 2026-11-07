@@ -7,7 +7,9 @@
 --             le modificano chi le ha create e gli amministratori.
 --   coffees   le confezioni nella dispensa di ciascuno (data di tostatura, peso, prezzo, terminato):
 --             private.
---   brews     le estrazioni: private.
+--   brews     le estrazioni: private, salvo quelle che il proprietario sceglie di condividere
+--             nella sezione Community (is_public): quelle le leggono tutti i membri.
+--   machines  le macchine espresso di ciascuno: private.
 --   grinders  i macinini di ciascuno: privati.
 --   profiles  il nome con cui ognuno compare nel catalogo: visibile ai membri.
 --   admins    gli amministratori: possono modificare ed eliminare qualsiasi scheda del catalogo
@@ -46,6 +48,16 @@ create table if not exists public.brews (
   updated_at timestamptz not null default now()
 );
 
+-- estrazioni condivise nella sezione Community
+alter table public.brews add column if not exists is_public boolean not null default false;
+
+create table if not exists public.machines (
+  id text primary key,
+  owner uuid not null default auth.uid() references auth.users on delete cascade,
+  data jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists public.grinders (
   id text primary key,
   owner uuid not null default auth.uid() references auth.users on delete cascade,
@@ -70,6 +82,8 @@ create index if not exists coffees_owner_idx on public.coffees (owner);
 create index if not exists brews_coffee_idx on public.brews (coffee_id);
 create index if not exists brews_owner_idx on public.brews (owner);
 create index if not exists grinders_owner_idx on public.grinders (owner);
+create index if not exists machines_owner_idx on public.machines (owner);
+create index if not exists brews_public_idx on public.brews (is_public) where is_public;
 create index if not exists catalog_created_by_idx on public.catalog (created_by);
 
 -- ---------- regole di sicurezza ----------
@@ -79,6 +93,7 @@ alter table public.coffees  enable row level security;
 alter table public.brews    enable row level security;
 alter table public.grinders enable row level security;
 alter table public.admins   enable row level security;
+alter table public.machines enable row level security;
 
 -- amministratori: ognuno vede solo se lo è lui; nessuna scrittura dall'app
 drop policy if exists "admins: lettura propria" on public.admins;
@@ -116,8 +131,22 @@ create policy "catalog: eliminazione autore" on public.catalog
 drop policy if exists "coffees: solo il proprietario" on public.coffees;
 create policy "coffees: solo il proprietario" on public.coffees
   for all to authenticated using (owner = (select auth.uid())) with check (owner = (select auth.uid()));
+-- estrazioni: le proprie sempre, quelle degli altri solo se condivise; si modificano solo le proprie
 drop policy if exists "brews: solo il proprietario" on public.brews;
-create policy "brews: solo il proprietario" on public.brews
+drop policy if exists "brews: lettura" on public.brews;
+create policy "brews: lettura" on public.brews
+  for select to authenticated using (owner = (select auth.uid()) or is_public);
+drop policy if exists "brews: inserimento" on public.brews;
+create policy "brews: inserimento" on public.brews
+  for insert to authenticated with check (owner = (select auth.uid()));
+drop policy if exists "brews: modifica" on public.brews;
+create policy "brews: modifica" on public.brews
+  for update to authenticated using (owner = (select auth.uid())) with check (owner = (select auth.uid()));
+drop policy if exists "brews: eliminazione" on public.brews;
+create policy "brews: eliminazione" on public.brews
+  for delete to authenticated using (owner = (select auth.uid()));
+drop policy if exists "machines: solo il proprietario" on public.machines;
+create policy "machines: solo il proprietario" on public.machines
   for all to authenticated using (owner = (select auth.uid())) with check (owner = (select auth.uid()));
 drop policy if exists "grinders: solo il proprietario" on public.grinders;
 create policy "grinders: solo il proprietario" on public.grinders
@@ -135,7 +164,7 @@ grant execute on function public.catalog_counts() to authenticated;
 do $$
 declare t text;
 begin
-  foreach t in array array['profiles','catalog','coffees','brews','grinders'] loop
+  foreach t in array array['profiles','catalog','coffees','brews','grinders','machines'] loop
     if not exists (select 1 from pg_publication_tables
                    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
       execute format('alter publication supabase_realtime add table public.%I', t);
