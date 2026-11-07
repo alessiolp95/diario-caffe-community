@@ -498,7 +498,15 @@ function nudgesHtml(count){
 
 function renderLibrary(){
   const all = [...S.bags.values()].map(view);
-  const active = all.filter(c => !c.finished).sort((a,b) => (b.createdAt||"").localeCompare(a.createdAt||""));
+  /* in dispensa: prima quelli già estratti (ultima estrazione più recente in alto),
+     poi quelli senza estrazioni per data di tostatura (il più vecchio in alto; senza data in fondo) */
+  const lastAt = c => (brewsOf(c.id)[0] || {}).at || "";
+  const active = all.filter(c => !c.finished).sort((a, b) => {
+    const la = lastAt(a), lb = lastAt(b);
+    if (la || lb) return la && lb ? lb.localeCompare(la) : la ? -1 : 1;
+    if (a.roastDate || b.roastDate) return a.roastDate && b.roastDate ? a.roastDate.localeCompare(b.roastDate) : a.roastDate ? -1 : 1;
+    return (b.createdAt || "").localeCompare(a.createdAt || "");
+  });
   const done = all.filter(c => c.finished).sort((a,b) => (b.finishedAt||"").localeCompare(a.finishedAt||""));
   const monthAgo = Date.now() - 30*dayMs;
   const recent = S.brews.filter(b => new Date(b.at).getTime() >= monthAgo).length;
