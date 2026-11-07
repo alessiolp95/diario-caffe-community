@@ -4,6 +4,6 @@
 // Sostituisci i due valori con quelli del progetto Supabase della community
 // (Project Settings → API Keys). Li usa anche l'azione di keep-alive.
 window.DIARIO_CONFIG = {
-  supabaseUrl: "https://INSERISCI-ID-PROGETTO.supabase.co",
-  supabaseKey: "INSERISCI-CHIAVE-PUBLISHABLE",
+  supabaseUrl: "https://mwfqjadccbsdevaelxsy.supabase.co",
+  supabaseKey: "sb_publishable_s3IuthlXTRKaRrkzvK7rLw_6Pu6ICzh",
 };
