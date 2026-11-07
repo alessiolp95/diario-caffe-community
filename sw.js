@@ -1,12 +1,14 @@
 // Service worker: fa funzionare l'app anche offline.
 // Il codice dell'app viene preso dalla rete quando possibile (così gli aggiornamenti arrivano subito)
 // e dalla copia salvata quando sei offline. Le foto e i font restano in cache.
-const VERSION = "community-v2";
+const VERSION = "community-v3";
 const MEDIA = "community-media";
 const SHELL = [
   "./",
   "./index.html",
   "./config.js",
+  "./legal.js",
+  "./fonts/fonts.css",
   "./manifest.webmanifest",
   "./vendor/supabase-2.117.3.js",
   "./icons/apple-touch-icon.png",
@@ -53,7 +55,7 @@ self.addEventListener("fetch", event => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin === self.location.origin){
-    const isCode = req.mode === "navigate" || /\/(index\.html|config\.js|sw\.js)?$/.test(url.pathname) || url.pathname.endsWith(".webmanifest");
+    const isCode = req.mode === "navigate" || /\/(index\.html|config\.js|legal\.js|sw\.js)?$/.test(url.pathname) || url.pathname.endsWith(".webmanifest");
     event.respondWith(isCode ? networkFirst(req) : cacheFirst(req, VERSION));
     return;
   }

@@ -13,9 +13,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <title>Diario caffè · Community</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="fonts/fonts.css">
 <style>
 /* Layout: one narrow mobile column; library → coffee detail → bottom-sheet forms. */
 :root{
@@ -186,6 +184,15 @@ textarea{min-height:110px;resize:vertical;line-height:1.45}
 
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-size:14px;z-index:40;max-width:90%}
 .confirm .sheet{gap:12px}
+.doc{display:flex;flex-direction:column;gap:10px;max-width:680px}
+.doc h2{margin-top:18px}
+.doc h3{margin-top:10px}
+.doc p,.doc ul{margin:0}
+.doc ul{padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.doc a{color:var(--accent)}
+.gate{display:flex;flex-direction:column;gap:14px;max-width:560px}
+.gate ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:8px}
+.foot .link{background:none;border:0;color:var(--muted);text-decoration:underline;font-size:14px;cursor:pointer;padding:8px}
 .foot{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding-top:16px;border-top:1px solid var(--line)}
 .foot .who{width:100%;text-align:center;font-size:13px;color:var(--muted)}
 .login{display:flex;flex-direction:column;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
@@ -240,6 +247,7 @@ textarea{min-height:110px;resize:vertical;line-height:1.45}
 </main>
 
 <script src="config.js"></script>
+<script src="legal.js"></script>
 <script src="vendor/supabase-2.117.3.js"></script>
 <script>
 (() => {
@@ -445,6 +453,7 @@ window.addEventListener("hashchange", render);
 
 /* ---------- render ---------- */
 function render(){
+  if (location.hash === "#info"){ renderInfo(); return; }
   if (S.needPassword){ renderSetPassword(); return; }
   if (S.needLogin){ renderLogin(); return; }
   if (!db){
@@ -458,6 +467,7 @@ function render(){
       "</p></div></header>";
     return;
   }
+  if (needsTerms()){ renderTermsGate(); return; }
   if (isCommunity()){ renderCommunity(); return; }
   const id = currentId();
   if (id && S.bags.has(id)) renderDetail(view(S.bags.get(id)));
@@ -705,6 +715,7 @@ app.addEventListener("click", e => {
   const bag = id && S.bags.get(id);
   if (act === "home") go(null);
   else if (act === "community") goCommunity(null);
+  else if (act === "info"){ location.hash = "info"; window.scrollTo(0, 0); }
   else if (act === "community-all") goCommunity(null);
   else if (act === "community-coffee" && bag) goCommunity(bag.catalogId);
   else if (act === "new-coffee") catalogSheet();
@@ -1659,6 +1670,38 @@ async function startData(){
   subscribe();
 }
 
+/* ---------- privacy e condizioni ---------- */
+const LEGAL = window.DIARIO_LEGAL || null;
+function needsTerms(){
+  if (!LEGAL || !session) return false;
+  const t = meta().termsAccepted;
+  return !t || t.version !== LEGAL.VERSION;
+}
+function renderInfo(){
+  if (!LEGAL){ location.hash = ""; return; }
+  const back = '<button class="btn ghost back" type="button" id="info-back">‹ ' + (session ? "Torna all'app" : "Accedi") + "</button>";
+  app.innerHTML = back + '<article class="doc">' + LEGAL.privacy + LEGAL.terms + "</article>" + back.replace('id="info-back"', 'id="info-back2"');
+  const goBack = () => { history.replaceState(null, "", location.pathname + location.search); render(); window.scrollTo(0, 0); };
+  document.getElementById("info-back").onclick = goBack;
+  document.getElementById("info-back2").onclick = goBack;
+}
+function renderTermsGate(){
+  const isUpdate = !!meta().termsAccepted;
+  app.innerHTML = '<header class="top"><div><h1>'+APP_TITLE+'</h1><p>' + (isUpdate ? "Privacy e condizioni d'uso sono state aggiornate." : "Prima di iniziare, due righe su come funziona la community.") + '</p></div></header>' +
+    '<section class="gate"><ul>' + LEGAL.summary.map(x => "<li>" + x + "</li>").join("") + "</ul>" +
+    '<p style="margin:0"><a href="#info" style="color:var(--accent)">Leggi l\'informativa privacy e le condizioni d\'uso complete</a></p>' +
+    '<label class="check" for="tg-ok"><input type="checkbox" id="tg-ok"><span class="t"><b>Ho letto e accetto</b><span class="hint">l\'informativa sulla privacy e le condizioni d\'uso (versione del ' + LEGAL.UPDATED + ').</span></span></label>' +
+    '<p class="err" id="tg-err" hidden style="color:var(--danger);margin:0;font-size:14px"></p>' +
+    '<div class="form-foot"><button class="btn ghost" type="button" data-act="logout">Esci</button><button class="btn primary" type="button" id="tg-go">Continua</button></div></section>';
+  document.getElementById("tg-go").onclick = async () => {
+    const err = document.getElementById("tg-err");
+    if (!document.getElementById("tg-ok").checked){ err.hidden = false; err.textContent = "Per usare l'app spunta la casella di accettazione."; return; }
+    const btn = document.getElementById("tg-go"); btn.disabled = true; btn.textContent = "Salvo…";
+    try { await setMeta({termsAccepted: {version: LEGAL.VERSION, at: new Date().toISOString()}}); render(); }
+    catch(e){ btn.disabled = false; btn.textContent = "Continua"; err.hidden = false; err.textContent = "Non riesco a salvare: controlla la connessione e riprova."; }
+  };
+}
+
 /* ---------- accesso ---------- */
 const passInput = (id, ac) => '<input type="password" autocomplete="'+ac+'" id="'+id+'">';
 function renderLogin(){
@@ -1668,7 +1711,8 @@ function renderLogin(){
     '<div class="field"><label for="lg-email">Email</label><input type="text" inputmode="email" autocomplete="username" autocapitalize="off" id="lg-email"></div>' +
     '<div class="field"><label for="lg-pass">Password</label>'+passInput("lg-pass", "current-password")+'</div>' +
     '<p class="err" id="lg-err" hidden></p>' +
-    '<div class="form-foot"><button class="btn primary" type="submit" id="lg-go">Accedi</button><button class="btn ghost" type="button" id="lg-forgot">Password dimenticata?</button></div></form>';
+    '<div class="form-foot"><button class="btn primary" type="submit" id="lg-go">Accedi</button><button class="btn ghost" type="button" id="lg-forgot">Password dimenticata?</button></div>' +
+    '<p class="small" style="margin:0"><a href="#info" style="color:var(--muted)">Privacy e condizioni d\'uso</a></p></form>';
   const f = document.getElementById("login"), err = document.getElementById("lg-err");
   const showErr = t => { err.hidden = false; err.textContent = t; };
   f.addEventListener("submit", async e => {
@@ -1743,7 +1787,7 @@ async function recordBackup(){
   render();
 }
 function footerHtml(){
-  return '<footer class="foot"><button class="btn" data-act="settings">Impostazioni</button><button class="btn" data-act="export">Esporta backup</button><button class="btn" data-act="import">Importa backup</button><button class="btn" data-act="logout">Esci</button>' +
+  return '<footer class="foot"><button class="btn" data-act="settings">Impostazioni</button><button class="btn" data-act="export">Esporta backup</button><button class="btn" data-act="import">Importa backup</button><button class="btn" data-act="logout">Esci</button><button class="link" data-act="info">Privacy e condizioni d\'uso</button>' +
     (session ? '<span class="who">Accesso come ' + esc(session.user.email || "") + (myName() ? " (" + esc(nick(me())) + ")" : "") + (lastBackup() ? " · ultimo backup " + fmtDate(lastBackup()) : "") + "</span>" : "") + "</footer>";
 }
 const blobToDataURL = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });

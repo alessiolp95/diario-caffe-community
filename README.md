@@ -21,6 +21,8 @@ Web app installabile su iPhone, Android e computer, ospitata su GitHub Pages, co
 ## Com'è fatta
 
 - `index.html`: tutta l'app.
+- `legal.js`: informativa privacy e condizioni d'uso.
+- `fonts/`: caratteri ospitati sul sito.
 - `config.js`: indirizzo e chiave pubblica del progetto Supabase.
 - `sw.js`, `manifest.webmanifest`, `icons/`: installazione nella schermata Home e funzionamento offline (sola lettura).
 - `vendor/`: libreria Supabase (versione 2.117.3), inclusa nel sito così funziona anche offline.
@@ -63,6 +65,17 @@ Al primo accesso l'app chiede il nome da mostrare accanto ai caffè aggiunti al 
 
 Per togliere un membro: Authentication → Users → elimina l'utente. Le sue confezioni ed estrazioni vengono cancellate;
 le schede che aveva creato restano nel catalogo (senza autore, modificabili solo dalla dashboard).
+
+## Privacy e condizioni d'uso
+
+I testi sono in `legal.js`: informativa privacy, condizioni d'uso, riepilogo e email di contatto (`CONTACT`).
+Al primo accesso ogni membro deve spuntare "Ho letto e accetto" (salvato nell'account come `termsAccepted`).
+Se si cambiano i testi in modo sostanziale, aggiornare `VERSION` in `legal.js`: al prossimo accesso tutti
+dovranno accettare di nuovo. La pagina completa è raggiungibile anche senza login (`#info`), dal link nella
+schermata di accesso e dal piè di pagina.
+
+I caratteri (Bricolage Grotesque, IBM Plex Sans e Mono, licenza SIL OFL 1.1) sono in `fonts/`, ospitati sul sito:
+nessuna richiesta a Google Fonts.
 
 ## Amministratori
 
