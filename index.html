@@ -245,6 +245,23 @@ textarea{min-height:110px;resize:vertical;line-height:1.45}
 .share-img{width:100%;border-radius:12px;border:1px solid var(--line);display:block}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .bc-body{display:flex;flex-direction:column;gap:14px}
+.bc-body code{font-size:12px;overflow-wrap:anywhere}
+.flowchart{margin:2px 0 0;display:flex;flex-direction:column;gap:4px;--fc-w:#bba98b;--fc-f:#1f4b61;--fc-p:#3aa874;--fc-t:#d07a2c}
+.flowchart figcaption{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 10px;align-items:baseline;font-size:13px;color:var(--muted)}
+.flowchart figcaption .flabel{margin:0}
+.flowchart svg{width:100%;height:auto;display:block;overflow:visible}
+.flowchart .fc-grid{stroke:var(--line);stroke-width:.8}
+.flowchart .fc-axis{stroke:var(--ink);stroke-width:1;opacity:.55}
+.flowchart .fc-tick{font-family:var(--font-mono);font-size:9.5px;fill:var(--muted)}
+.flowchart .fc-tick.fc-w{fill:var(--fc-w)} .flowchart .fc-tick.fc-f{fill:var(--fc-f)} .flowchart .fc-tick.fc-p{fill:var(--fc-p)}
+.flowchart .fc-l{fill:none;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.flowchart polyline.fc-wl{stroke:var(--fc-w)} .flowchart polyline.fc-fl{stroke:var(--fc-f)} .flowchart polyline.fc-pl{stroke:var(--fc-p)} .flowchart polyline.fc-tc{stroke:var(--fc-t);stroke-dasharray:4 3}
+.fc-legend{display:flex;flex-wrap:wrap;gap:2px 14px;font-size:12.5px;color:var(--muted)}
+.fc-legend span{display:inline-flex;align-items:center;gap:6px}
+.fc-legend i{width:14px;height:3px;border-radius:2px;display:inline-block}
+.fc-legend i.fc-wl{background:var(--fc-w)} .fc-legend i.fc-fl{background:var(--fc-f)} .fc-legend i.fc-pl{background:var(--fc-p)} .fc-legend i.fc-tc{background:var(--fc-t)}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .flowchart{--fc-w:#cdbd9f;--fc-f:#8cc3de;--fc-p:#5fd09a;--fc-t:#f0a35e} }
+:root[data-theme="dark"] .flowchart{--fc-w:#cdbd9f;--fc-f:#8cc3de;--fc-p:#5fd09a;--fc-t:#f0a35e}
 .bc-row{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);margin-top:6px}
 .bc-row select{width:100%}
 /* ruota degli aromi */
@@ -642,6 +659,7 @@ function brewInner(b){
     '<div class="when">'+fmtWhen(b.at)+(age != null ? " · "+age+" gg dalla tostatura" : "")+"</div>" +
     (parts.length ? '<div class="params">'+parts.join("")+"</div>" : "") +
     (b.aromas && b.aromas.length ? '<div class="aromas">'+sortAromas(b.aromas).map(a => aromaChip(a)).join("")+"</div>" : "") +
+    (b.bcFlow ? flowChartSvg(b.bcFlow) : "") +
     (b.notes ? '<p class="notes">'+esc(b.notes)+"</p>" : "");
 }
 function brewCard(b){
@@ -1455,6 +1473,7 @@ function brewSheet(coffee, b){
     '<p class="calc" id="bf-calc"></p>' +
     '<div class="prefill" id="bf-defs"></div>' +
     (coffee.tasting ? '<div class="declared"><span class="flabel">Note dichiarate in busta</span><p>'+esc(coffee.tasting)+'</p></div>' : "") +
+    (b && b.bcFlow ? flowChartSvg(b.bcFlow) : "") +
     '<div class="field" id="bf-aromi"><span class="flabel">Aromi percepiti</span><div class="aromas" id="bf-aromas"></div><button type="button" class="btn small" id="bf-wheel" style="align-self:flex-start"></button></div>' +
     '<div class="field"><span class="flabel">Voto</span><div class="rating" id="bf-rating">' + [1,2,3,4,5].map(i => '<button type="button" data-r="'+i+'" aria-label="'+i+' su 5">★</button>').join("") + "</div></div>" +
     '<div class="field"><label for="bf-notes">Risultato estrazione</label><textarea id="bf-notes" placeholder="Gusto, corpo, acidità, difetti, cosa cambiare la prossima volta…">'+esc(b?.notes||"")+"</textarea></div>" +
@@ -1615,6 +1634,7 @@ function brewSheet(coffee, b){
       coffeeId: coffee.id, method, at: (isNaN(at) ? new Date() : at).toISOString(),
       params: readParams(), rating, notes: $("#bf-notes").value.trim(),
       ...(aromas.size ? {aromas: sortAromas(aromas)} : {}),
+      ...(b && b.bcFlow ? {bcFlow: b.bcFlow} : {}),
       createdAt: b?.createdAt || new Date().toISOString(),
       /* per la Community: gli altri non vedono la confezione, quindi scheda e giorni dalla tostatura si salvano qui */
       catalogId: coffee.catalogId, public: $("#bf-public").checked,
@@ -2490,32 +2510,45 @@ async function readZip(buf){
     const nameLen = dv.getUint16(p + 28, true), extraLen = dv.getUint16(p + 30, true), commLen = dv.getUint16(p + 32, true);
     const local = dv.getUint32(p + 42, true);
     const name = dec.decode(u8.subarray(p + 46, p + 46 + nameLen));
-    files.set(name, async () => {
+    files.set(name, async binary => {
       const start = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true);
       const raw = u8.slice(start, start + size);
-      if (method === 0) return dec.decode(raw);
-      if (method !== 8 || typeof DecompressionStream === "undefined") throw new Error("zip-method");
-      return await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+      if (method !== 0 && (method !== 8 || typeof DecompressionStream === "undefined")) throw new Error("zip-method");
+      const res = method === 0 ? new Response(raw) : new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw")));
+      return binary ? await res.arrayBuffer() : await res.text();
     });
     p += 46 + nameLen + extraLen + commLen;
   }
   return files;
 }
-async function readBeanconqueror(file){
-  const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
-  if (head[0] === 0x50 && head[1] === 0x4b){
-    const files = await readZip(await file.arrayBuffer());
-    const main = files.get("Beanconqueror.json"); if (!main) return null;
-    const data = JSON.parse(await main());
-    for (const [prop, part] of [["BREWS", "Brews"], ["BEANS", "Beans"]]){
-      for (let i = 1; files.has("Beanconqueror_" + part + "_" + i + ".json"); i++){
-        const chunk = JSON.parse(await files.get("Beanconqueror_" + part + "_" + i + ".json")());
-        if (Array.isArray(chunk)) data[prop] = (data[prop] || []).concat(chunk);
+/* legge i file scelti: Beanconqueror.zip / .json, pezzi oltre 500 elementi, grafici (anche dentro uno zip) */
+async function readBcFiles(files){
+  let data = null; const chunks = [], flows = [];
+  const BC_FLOW_NAME = /(_flow_profile|_visualizer|Flowprofile[^/]*)\.json$/i;
+  const takeJson = (name, raw) => {
+    const base = name.split("/").pop();
+    const ch = /^Beanconqueror_(Brews|Beans)_\d+\.json$/i.exec(base);
+    if (ch && Array.isArray(raw)){ chunks.push([ch[1].toUpperCase(), raw]); return; }
+    if (isBeanconqueror(raw)){ if (!data) data = raw; return; }
+    const fl = bcFlowFromFile(name, raw); if (fl) flows.push(fl);
+  };
+  const takeZip = async (buf, depth) => {
+    const z = await readZip(buf);
+    for (const [name, get] of z){
+      const base = name.split("/").pop();
+      if (/\.zip$/i.test(base) && depth < 1){ const t = await get(true); if (t) await takeZip(t, depth + 1); continue; }
+      if (base === "Beanconqueror.json" || /^Beanconqueror_(Brews|Beans)_\d+\.json$/i.test(base) || BC_FLOW_NAME.test(base)){
+        try { takeJson(name, JSON.parse(await get())); } catch {}
       }
     }
-    return data;
+  };
+  for (const f of files){
+    const head = new Uint8Array(await f.slice(0, 2).arrayBuffer());
+    if (head[0] === 0x50 && head[1] === 0x4b) await takeZip(await f.arrayBuffer(), 0);
+    else { let raw; try { raw = JSON.parse(await f.text()); } catch { continue; } takeJson(f.name || "", raw); }
   }
-  return null;
+  if (data) for (const [prop, arr] of chunks) data[prop] = (data[prop] || []).concat(arr);
+  return {data, flows};
 }
 const isBeanconqueror = d => d && typeof d === "object" && Array.isArray(d.BEANS) && Array.isArray(d.BREWS);
 
@@ -2549,7 +2582,104 @@ function bcFlavors(f){
   return {aromas: sortAromas(aromas), words};
 }
 
-function beanconquerorSheet(data){
+/* ---------- grafici delle estrazioni di Beanconqueror ----------
+   Beanconqueror salva il grafico (bilancia Bluetooth, sensore di pressione, macchine collegate) in un file a parte:
+   brews/<uuid>_flow_profile.json, oppure <uuid>_visualizer.json (campo brewFlow), oppure Beanconqueror_Flowprofile_JSON_<ora>.json.
+   Nell'estrazione importata salviamo una versione compatta: bcFlow = {v, d, avg, max, w, f, p, tc}
+   con le serie come [t0, y0, t1, y1, …] (secondi dall'inizio, valori arrotondati). */
+const BC_FLOW_POINTS = 240;
+const isBcFlow = x => x && typeof x === "object" && (Array.isArray(x.weight) || Array.isArray(x.pressureFlow) || Array.isArray(x.realtimeFlow));
+function bcClock(ts){
+  const m = /^(\d{1,2}):(\d{2}):(\d{2})(?:[.,](\d{1,3}))?/.exec(String(ts || "")); if (!m) return null;
+  return ((+m[1] * 60 + +m[2]) * 60 + +m[3]) * 1000 + (m[4] ? +m[4].padEnd(3, "0") : 0);
+}
+function bcFlowFromFile(name, raw){
+  const id = (/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})_(?:flow_profile|visualizer)\.json$/i.exec(name) || [])[1] || "";
+  const flow = isBcFlow(raw) ? raw : raw && isBcFlow(raw.brewFlow) ? raw.brewFlow : null;
+  return flow ? {id: id.toLowerCase(), name: name.split("/").pop(), flow} : null;
+}
+function compactBcFlow(flow){
+  const series = (arr, key) => (Array.isArray(arr) ? arr : []).map(e => [bcClock(e && e.timestamp), Number(e && e[key])]).filter(([t, y]) => t != null && isFinite(y));
+  const raw = {w: series(flow.weight, "actual_weight"), f: series(flow.realtimeFlow, "flow_value"), p: series(flow.pressureFlow, "actual_pressure"), tc: series(flow.temperatureFlow, "actual_temperature")};
+  if (!raw.f.length) raw.f = series(flow.waterFlow, "value");
+  const first = [raw.w, raw.p, raw.tc, raw.f].find(s => s.length);
+  if (!first) return null;
+  const t0 = first[0][0];
+  const rel = t => { let d = t - t0; if (d < -12 * 3600e3) d += 24 * 3600e3; return d / 1000; };
+  let end = 0;
+  const out = {v: 1};
+  for (const [k, pts] of Object.entries(raw)){
+    const s = pts.map(([t, y]) => [rel(t), y]).filter(([t]) => t >= 0).sort((a, b) => a[0] - b[0]);
+    if (!s.length || s.every(([, y]) => y === 0)) continue;
+    end = Math.max(end, s[s.length - 1][0]);
+    /* al massimo BC_FLOW_POINTS punti: media per intervalli di tempo, primo e ultimo punto esatti */
+    let keep = s;
+    if (s.length > BC_FLOW_POINTS){
+      const span = s[s.length - 1][0] - s[0][0] || 1, n = BC_FLOW_POINTS - 2, buckets = Array.from({length: n}, () => [0, 0, 0]);
+      for (const [t, y] of s.slice(1, -1)){ const i = Math.min(n - 1, Math.floor((t - s[0][0]) / span * n)); buckets[i][0] += t; buckets[i][1] += y; buckets[i][2]++; }
+      keep = [s[0], ...buckets.filter(b => b[2]).map(b => [b[0] / b[2], b[1] / b[2]]), s[s.length - 1]];
+    }
+    out[k] = keep.flatMap(([t, y]) => [Math.round(t * 10) / 10, Math.round(y * 100) / 100]);
+  }
+  if (!out.w && !out.f && !out.p && !out.tc) return null;
+  const wf = (Array.isArray(flow.waterFlow) ? flow.waterFlow : []).map(e => Number(e && e.value)).filter(v => isFinite(v) && v > 0);
+  out.d = Math.round(end * 10) / 10;
+  if (wf.length){ out.avg = Math.round(wf.reduce((a, b) => a + b, 0) / wf.length * 100) / 100; out.max = Math.round(Math.max(...wf) * 100) / 100; }
+  return out;
+}
+/* quanto un grafico somiglia a un'estrazione (per abbinare i file senza codice): peso finale e durata */
+function bcFlowMatchScore(flow, brew){
+  const c = compactBcFlow(flow); if (!c) return 0;
+  const lastW = c.w ? c.w[c.w.length - 1] : null, out = bcNum(brew.brew_beverage_quantity) || bcNum(brew.brew_quantity), time = bcNum(brew.brew_time);
+  let s = 0.1;
+  if (lastW != null && out) s += Math.max(0, 1 - Math.abs(lastW - out) / Math.max(out, 1) * 4);
+  if (time) s += Math.max(0, 1 - Math.abs(c.d - time) / Math.max(time, 1) * 2);
+  return s;
+}
+
+/* disegno: peso (asse a sinistra), flusso (destra), pressione (destra, interna), temperatura (solo intervallo in legenda) */
+function flowChartSvg(f){
+  if (!f) return "";
+  const pairs = a => { const out = []; for (let i = 0; a && i < a.length - 1; i += 2) out.push([a[i], a[i + 1]]); return out; };
+  const S2 = {w: pairs(f.w), f: pairs(f.f), p: pairs(f.p), tc: pairs(f.tc)};
+  const W = 340, H = 178, L = 30, R = f.p ? 300 : 312, T = 10, B = 146;
+  const dur = Math.max(f.d || 0, ...Object.values(S2).flat().map(([t]) => t), 1);
+  const tStep = [2, 5, 10, 15, 30, 60, 120, 300].find(s => dur / s <= 6) || 600;
+  const x = t => L + (R - L) * t / dur;
+  /* passo "tondo" più piccolo che sta in al massimo ticks + 1 tacche */
+  const axis = (pts, ticks) => {
+    const m = Math.max(...pts.map(([, y]) => y), 0.1), mag0 = 10 ** (Math.floor(Math.log10(m)) - 2);
+    for (let mag = mag0; ; mag *= 10) for (const k of [1, 2, 2.5, 5]){ const st = k * mag; if (Math.ceil(m / st - 1e-9) <= ticks + 1) return {max: Math.ceil(m / st - 1e-9) * st, step: st}; }
+  };
+  const aw = S2.w.length ? axis(S2.w, 4) : null, af = S2.f.length ? axis(S2.f, 4) : null, ap = S2.p.length ? axis(S2.p, 5) : null;
+  const tmin = S2.tc.length ? Math.min(...S2.tc.map(p => p[1])) : 0, tmax = S2.tc.length ? Math.max(...S2.tc.map(p => p[1])) : 0;
+  const y = (v, a) => B - (B - T) * v / a.max;
+  const line = (pts, fy, cls) => pts.length ? '<polyline class="'+cls+'" points="'+pts.map(([t, v]) => x(t).toFixed(1) + "," + fy(v).toFixed(1)).join(" ")+'"/>' : "";
+  let g = "";
+  const main = aw || af || ap;
+  if (main) for (let v = 0; v <= main.max + 1e-9; v += main.step) g += '<line class="fc-grid" x1="'+L+'" x2="'+R+'" y1="'+y(v, main).toFixed(1)+'" y2="'+y(v, main).toFixed(1)+'"/>';
+  for (let t = 0; t <= dur + 1e-9; t += tStep){
+    g += '<line class="fc-grid" x1="'+x(t).toFixed(1)+'" x2="'+x(t).toFixed(1)+'" y1="'+T+'" y2="'+B+'"/>' +
+      '<text class="fc-tick" x="'+x(t).toFixed(1)+'" y="'+(B + 14)+'" text-anchor="middle">'+Math.floor(t / 60)+":"+String(t % 60).padStart(2, "0")+"</text>";
+  }
+  g += '<line class="fc-axis" x1="'+L+'" x2="'+R+'" y1="'+B+'" y2="'+B+'"/>';
+  const ticks = (a, xx, anchor, cls) => { let h = ""; if (!a) return h; for (let v = 0; v <= a.max + 1e-9; v += a.step) h += '<text class="fc-tick '+cls+'" x="'+xx+'" y="'+(y(v, a) + 3.5).toFixed(1)+'" text-anchor="'+anchor+'">'+fmtNum(Math.round(v * 100) / 100)+"</text>"; return h; };
+  g += ticks(aw, L - 5, "end", "fc-w") + ticks(af, W - 2, "end", "fc-f") + ticks(ap, R + 4, "start", "fc-p");
+  if (S2.tc.length){ const tr = Math.max(tmax - tmin, 1); g += line(S2.tc, v => B - (B - T) * (0.15 + 0.7 * (v - tmin) / tr), "fc-l fc-tc"); }
+  if (aw) g += line(S2.w, v => y(v, aw), "fc-l fc-wl");
+  if (ap) g += line(S2.p, v => y(v, ap), "fc-l fc-pl");
+  if (af) g += line(S2.f, v => y(v, af), "fc-l fc-fl");
+  const leg = [aw && ["fc-wl", "Peso (g)"], af && ["fc-fl", "Flusso (g/s)"], ap && ["fc-pl", "Pressione (bar)"], S2.tc.length && ["fc-tc", "Temperatura " + fmtNum(Math.round(tmin * 10) / 10) + "–" + fmtNum(Math.round(tmax * 10) / 10) + " °C"]].filter(Boolean);
+  const lastW = S2.w.length ? S2.w[S2.w.length - 1][1] : null;
+  const stats = [f.avg ? "Ø " + fmtNum(f.avg) + " g/s" : "", f.max ? "picco " + fmtNum(f.max) + " g/s" : "",
+    [lastW != null ? fmtNum(Math.round(lastW * 10) / 10) + " g" : "", f.d ? (lastW != null ? "in " : "") + fmtSec(f.d) : ""].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
+  return '<figure class="flowchart"><figcaption><span class="flabel">Grafico da Beanconqueror</span>' + (stats ? "<span>"+esc(stats)+"</span>" : "") + "</figcaption>" +
+    '<svg viewBox="0 0 '+W+" "+H+'" role="img" aria-label="Grafico dell\'estrazione: '+esc(leg.map(l => l[1]).join(", "))+'">'+g+"</svg>" +
+    '<div class="fc-legend">' + leg.map(([c, t]) => '<span><i class="'+c+'"></i>'+esc(t)+"</span>").join("") + "</div></figure>";
+}
+
+function beanconquerorSheet(data, flows){
+  flows = flows || [];
   const beans = data.BEANS.filter(b => bcId(b) && b.name);
   const beanIds = new Set(beans.map(bcId));
   const brews = data.BREWS.filter(b => bcId(b) && beanIds.has(String(b.bean)));
@@ -2560,6 +2690,21 @@ function beanconquerorSheet(data){
   const settings = (data.SETTINGS || [])[0] || {};
   const maxRating = bcNum(settings.brew_rating) || 5;
   const done = brews.filter(b => S.brews.some(x => x.id === "bc-" + bcId(b))).length;
+  /* grafici: abbinati dal codice nel nome del file, gli altri si scelgono */
+  const withGraph = brews.filter(b => String(b.flow_profile || "").trim());
+  const flowOf = new Map();
+  for (const fl of flows) if (fl.id && brews.some(b => bcId(b).toLowerCase() === fl.id) && !flowOf.has(fl.id)) flowOf.set(fl.id, fl.flow);
+  const loose = flows.filter(fl => !flowOf.has(fl.id) || flowOf.get(fl.id) !== fl.flow);
+  const candidates = () => withGraph.filter(b => !flowOf.has(bcId(b).toLowerCase()));
+  const looseChoice = new Map();
+  { const taken = new Set();
+    for (const [i, fl] of loose.entries()){
+      const best = candidates().filter(b => !taken.has(bcId(b))).map(b => [bcId(b), bcFlowMatchScore(fl.flow, b)]).sort((x, y) => y[1] - x[1])[0];
+      const only = candidates().length === 1 && loose.length === 1;
+      if (best && (best[1] >= 0.9 || only)){ looseChoice.set(i, best[0]); taken.add(best[0]); } else looseChoice.set(i, "");
+    } }
+  const brewLabel = b => { const bean = beans.find(x => bcId(x) === String(b.bean)), pr = preps.get(String(b.method_of_preparation)), at = bcDate(b);
+    return [at ? at.toLocaleDateString("it-IT", {day:"numeric", month:"short"}) + " " + at.toLocaleTimeString("it-IT", {hour:"2-digit", minute:"2-digit"}) : "", bean && bean.name, pr && pr.name].filter(Boolean).join(" · "); };
   const flavorCount = brews.filter(b => bcFlavors(b.cupped_flavor).aromas.length).length;
   if (!beans.length){ toast("Nel file di Beanconqueror non ci sono caffè da importare."); return; }
 
@@ -2584,7 +2729,7 @@ function beanconquerorSheet(data){
     '<optgroup label="Crea dai modelli">' + presetsAll.map((t, i) => '<option value="p:'+i+'"'+(sel === "p:" + i ? " selected" : "")+'>'+esc(grinderLabel(t) + " · " + fmtNum(t.min) + "–" + fmtNum(t.max) + ", step " + fmtNum(t.step))+"</option>").join("") + "</optgroup>";
   const draw = () => {
     let h = '<p style="margin:0">Trovati <b>' + beans.length + (beans.length === 1 ? " caffè" : " caffè") + "</b> e <b>" + brews.length + (brews.length === 1 ? " estrazione" : " estrazioni") + "</b>" +
-      (done ? " (" + done + " già importate: non vengono toccate)" : "") + ".</p>" +
+      (done ? " (" + done + " già importate: non vengono toccate" + (flows.length ? ", si aggiungono solo i grafici mancanti" : "") + ")" : "") + ".</p>" +
       '<p class="hint">Le foto non sono incluse nell\'esportazione di Beanconqueror: puoi aggiungerle dopo dalla scheda del caffè.</p>';
     h += '<div class="field"><span class="flabel">Caffè</span>' + beans.map(b => {
       const id = bcId(b), sim = likelyDuplicates({name: b.name, roaster: b.roaster || ""}).slice(0, 3), had = S.bags.has("bc-" + id);
@@ -2604,6 +2749,15 @@ function beanconquerorSheet(data){
       return '<div class="bc-row"><b>'+esc(m.name)+'</b><select data-mill="'+esc(id)+'" aria-label="Macinino per '+esc(m.name)+'">'+millOptions(millChoice.get(id))+'</select>' +
         '<button type="button" class="btn small" data-newmill="'+esc(id)+'" style="align-self:flex-start">+ Nuovo macinino</button></div>';
     }).join("") + '<p class="hint">Beanconqueror non salva la scala del macinino: scegli il tuo o un modello, così la macinatura resta confrontabile.</p></div>';
+    if (withGraph.length || flows.length){
+      const matched = withGraph.filter(b => flowOf.has(bcId(b).toLowerCase()) || [...looseChoice.values()].includes(bcId(b))).length;
+      h += '<div class="field"><span class="flabel">Grafici</span><p style="margin:0">' + (withGraph.length
+        ? matched + " di " + withGraph.length + (withGraph.length === 1 ? " estrazione con grafico" : " estrazioni con grafico") + (matched === 1 ? " avrà il suo grafico." : " avranno il loro grafico.")
+        : "Nessuna estrazione di questo file ha un grafico.") + "</p>" +
+        loose.map((fl, i) => '<div class="bc-row"><b>'+esc(fl.name)+'</b><select data-flow="'+i+'" aria-label="Estrazione per il grafico '+esc(fl.name)+'"><option value="">Non importare questo grafico</option>' +
+          withGraph.filter(b => !flowOf.has(bcId(b).toLowerCase())).map(b => '<option value="'+esc(bcId(b))+'"'+(looseChoice.get(i) === bcId(b) ? " selected" : "")+">"+esc(brewLabel(b))+"</option>").join("") + "</select></div>").join("") +
+        (matched < withGraph.length ? '<p class="hint">I grafici non sono dentro Beanconqueror.zip: sono file a parte (<code>…_flow_profile.json</code>). Su iPhone li trovi nell\'app File, cartella Beanconqueror › brews; su Android in Download › Beanconqueror_export dopo l\'esportazione. Puoi anche scaricarne uno dal dettaglio dell\'estrazione (freccia sopra il grafico › JSON). Scegli i file insieme al .zip.</p>' : "") + "</div>";
+    }
     if (flavorCount) h += '<p class="hint">Gli aromi scelti in Beanconqueror passano sulla ruota SCA; quelli senza un equivalente preciso vanno anche nelle note.</p>';
     h += '<p class="hint">Le nuove schede del catalogo le vedono tutti i membri; confezioni ed estrazioni restano private.</p>';
     s.el.querySelector("#bc-body").innerHTML = h;
@@ -2615,6 +2769,10 @@ function beanconquerorSheet(data){
     if (t.dataset.bean) beanChoice.set(t.dataset.bean, t.value);
     if (t.dataset.prep) prepChoice.set(t.dataset.prep, t.value);
     if (t.dataset.mill != null && t.dataset.mill !== "") millChoice.set(t.dataset.mill, t.value);
+    if (t.dataset.flow != null){
+      for (const [i, v] of looseChoice) if (v && v === t.value && String(i) !== t.dataset.flow) looseChoice.set(i, "");
+      looseChoice.set(Number(t.dataset.flow), t.value); draw();
+    }
   });
   s.el.addEventListener("click", e => {
     const nb = e.target.closest("[data-newmill]"); if (!nb) return;
@@ -2663,10 +2821,14 @@ function beanconquerorSheet(data){
           bagOf.set(id, bagId); bagData.set(bagId, bag);
         }
         /* estrazioni */
-        let skipped = 0;
+        let skipped = 0, graphs = 0;
+        const flowFor = b => { const u = bcId(b); if (flowOf.has(u.toLowerCase())) return flowOf.get(u.toLowerCase()); for (const [i, v] of looseChoice) if (v === u) return loose[i].flow; return null; };
+        const graphUpdates = [];
         for (const b of brews){
           const id = "bc-" + bcId(b);
-          if (S.brews.some(x => x.id === id)){ skipped++; continue; }
+          const fl = flowFor(b), bcFlow = fl ? compactBcFlow(fl) : null;
+          const existing = S.brews.find(x => x.id === id);
+          if (existing){ skipped++; if (bcFlow && !existing.bcFlow) graphUpdates.push([id, bcFlow]); continue; }
           const bagId = bagOf.get(String(b.bean)), bag = bagData.get(bagId); if (!bag) continue;
           const prep = preps.get(String(b.method_of_preparation));
           const choice = prep ? (prepChoice.get(bcId(prep)) || "keep") : "keep";
@@ -2694,8 +2856,8 @@ function beanconquerorSheet(data){
           if (bcNum(b.tds)) extra.push("TDS: " + fmtNum(bcNum(b.tds)) + " %");
           if (bcNum(b.coffee_first_drip_time)) extra.push("Prima goccia: " + fmtSec(bcNum(b.coffee_first_drip_time)));
           if (String(b.pressure_profile || "").trim()) extra.push("Profilo di pressione: " + String(b.pressure_profile).trim());
-          const fl = bcFlavors(b.cupped_flavor);
-          if (fl.words.length) extra.push("Aromi (Beanconqueror): " + fl.words.join(", "));
+          const fv = bcFlavors(b.cupped_flavor);
+          if (fv.words.length) extra.push("Aromi (Beanconqueror): " + fv.words.join(", "));
           const at = bcDate(b) || new Date();
           const r = bcNum(b.rating);
           const age = bag.roastDate ? daysBetween(bag.roastDate, at.toISOString()) : null;
@@ -2703,20 +2865,26 @@ function beanconquerorSheet(data){
             coffeeId: bagId, method, at: at.toISOString(), params: p,
             rating: r ? Math.min(5, Math.max(1, Math.round(r / maxRating * 5))) : 0,
             notes: [String(b.note || "").trim(), ...extra].filter(Boolean).join("\n"),
-            ...(fl.aromas.length ? {aromas: fl.aromas} : {}),
+            ...(fv.aromas.length ? {aromas: fv.aromas} : {}),
+            ...(bcFlow ? {bcFlow} : {}),
             createdAt: at.toISOString(), catalogId: bag.catalogId, public: false,
             roastDays: age != null && age >= 0 ? age : null,
           };
           brewRows.push({id, coffee_id: bagId, is_public: false, data, updated_at: now});
+          if (bcFlow) graphs++;
         }
         const putRows = async (table, rows) => { for (let i = 0; i < rows.length; i += 200){ const {error} = await sb.from(table).upsert(rows.slice(i, i + 200)); if (error) throw wrapErr(error); } };
         await putRows("grinders", grinderRows);
         await putRows("catalog", catalogRows);
         await putRows("coffees", bagRows);
         await putRows("brews", brewRows);
+        for (const [id, bcFlow] of graphUpdates){ await db.collection("brews").doc(id).update({bcFlow}); graphs++; }
         await refresh(); loadPresets();
         s.close();
-        toast("Importati da Beanconqueror: " + bagRows.length + " caffè (" + catalogRows.length + (catalogRows.length === 1 ? " nuova scheda" : " nuove schede") + ") e " + brewRows.length + (brewRows.length === 1 ? " estrazione" : " estrazioni") + (skipped ? " · " + skipped + " già presenti" : ""));
+        const parts = [];
+        if (bagRows.length || brewRows.length) parts.push(bagRows.length + " caffè (" + catalogRows.length + (catalogRows.length === 1 ? " nuova scheda" : " nuove schede") + ") e " + brewRows.length + (brewRows.length === 1 ? " estrazione" : " estrazioni"));
+        if (graphs) parts.push(graphs + (graphs === 1 ? " grafico" : " grafici"));
+        toast(parts.length ? "Importati da Beanconqueror: " + parts.join(" · ") : "Niente di nuovo: era già tutto importato.");
       } catch(e){ toast(errMsg(e)); }
     });
   });
@@ -2724,16 +2892,18 @@ function beanconquerorSheet(data){
 
 function importBackup(){
   const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = ".json,.zip,application/json,application/zip";
+  inp.type = "file"; inp.accept = ".json,.zip,application/json,application/zip"; inp.multiple = true;
   inp.addEventListener("change", async () => {
-    const f = inp.files && inp.files[0]; if (!f) return;
-    let data;
-    try { data = await readBeanconqueror(f); }
+    const all = inp.files ? [...inp.files] : [], f = all[0]; if (!f) return;
+    let data, bc;
+    try { bc = await readBcFiles(all); }
     catch(e){ toast(String(e && e.message) === "zip-method" ? "Questo browser non riesce ad aprire il file .zip: aggiorna il browser o estrai Beanconqueror.json e importa quello." : "Non riesco ad aprire il file .zip."); return; }
+    if (bc.data){ beanconquerorSheet(bc.data, bc.flows); return; }
+    if (bc.flows.length){ toast("Hai scelto solo i grafici: scegli anche Beanconqueror.zip (o Beanconqueror.json) insieme a loro."); return; }
     if (!data){
       try { data = JSON.parse(await f.text()); } catch { toast("Il file non è un backup valido."); return; }
     }
-    if (isBeanconqueror(data)){ beanconquerorSheet(data); return; }
+    if (isBeanconqueror(data)){ beanconquerorSheet(data, []); return; }
     const community = data && data.app === "diario-caffe-community", legacy = data && data.app === "diario-caffe";
     if ((!community && !legacy) || !Array.isArray(data.coffees) || !Array.isArray(data.brews)){ toast("Il file non è un backup del Diario caffè."); return; }
     const msg = legacy

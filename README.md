@@ -109,6 +109,10 @@ Il piano gratuito di Supabase non fa copie automatiche. Ogni membro può usare "
 una schermata propone gli abbinamenti (scheda del catalogo nuova o esistente, metodo, macinino) prima di importare.
 Le foto non sono incluse nell'esportazione di Beanconqueror; gli aromi passano sulla ruota SCA, quelli senza equivalente vanno nelle note,
 e reimportare lo stesso file non crea doppioni.
+I grafici delle estrazioni (bilancia Bluetooth, sensore di pressione) non sono dentro Beanconqueror.zip ma in file a parte
+(`brews/<codice>_flow_profile.json`, oppure il JSON scaricato dal dettaglio dell'estrazione): si scelgono insieme al .zip,
+vengono abbinati alle estrazioni (dal codice nel nome o per peso e durata) e salvati in forma compatta nell'estrazione (`bcFlow`).
+Il grafico (peso, flusso, pressione, temperatura) compare solo nelle estrazioni importate che lo hanno.
 "Importa backup" accetta anche i backup della versione personale del Diario caffè: ogni caffè diventa una scheda del catalogo
 (o viene collegato a una scheda già presente con lo stesso nome e torrefazione) più una confezione in dispensa,
 e i macinini Pietro e Hibrew G5 vengono creati in automatico.
