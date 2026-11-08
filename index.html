@@ -288,8 +288,11 @@ const FIELDS = {
   pours:      {label:"N. versate", type:"slider", min:1, max:8, step:1},
   time:       {label:"Tempo di estrazione", type:"slider", dur:true, min:0, max:420, step:5},
   /* solo per mostrare estrazioni importate da versioni precedenti */
-  preinf:     {label:"Preinfusione", dur:true},
-  steep:      {label:"Infusione", dur:true},
+  preinf:     {label:"Preinfusione", type:"slider", dur:true, min:0, max:120, step:1},
+  steep:      {label:"Tempo di infusione", type:"slider", dur:true, min:0, max:900, step:15},
+  cups:       {label:"Tazze", type:"choice", options:["1","2","3","4","6","9","18"], required:true},
+  mokaPaper:  {label:"Filtro di carta", type:"check"},
+  ebFilter:   {label:"Filtro E&B Lab", type:"check"},
   waterStart: {label:"Acqua in caldaia"},
   heat:       {label:"Fiamma"},
   pressure:   {label:"Pressione", unit:"bar"},
@@ -298,7 +301,7 @@ const FIELDS = {
   hours:      {label:"Infusione", unit:"ore"},
   device:     {label:"Attrezzo"},
 };
-const DISPLAY_ORDER = ["dose","yield","water","bypass","temp","grind","tamp","paperFilter","paper","bloomWater","bloomTime","pours","time","preinf","steep","waterStart","heat","pressure","orientation","filter","hours"];
+const DISPLAY_ORDER = ["cups","dose","yield","water","bypass","temp","grind","tamp","paperFilter","mokaPaper","ebFilter","paper","bloomWater","bloomTime","pours","preinf","steep","time","waterStart","heat","pressure","orientation","filter","hours"];
 const METHODS = {
   espressoClassico: {label:"Espresso classico", fields:["machine","dose","yield","temp","grind"],
     defaults:{dose:18, yield:36, temp:95}, ratio:2},
@@ -310,10 +313,16 @@ const METHODS = {
     defaults:{dose:18, water:270, bypass:0, temp:90, time:0}, ratio:15},
   filtro:           {label:"Filtro", fields:["dripper","paper","dose","water","temp","grind","bloomWater","bloomTime","pours","time"],
     defaults:{dripper:"V60", dose:18, water:270, temp:90, bloomTime:30, pours:1, time:0}, ratio:15, bloomAuto:3},
-  moka:             {label:"Moka 1 tazza", fields:["dose","water","grind"],
-    defaults:{dose:7, water:70}, ratio:10},
-  mokapump:         {label:"Moka Pump 3 tazze", fields:["dose","water","temp","grind"],
-    defaults:{dose:17, water:170, temp:85}, ratio:10},
+  moka:             {label:"Moka", fields:["cups","dose","water","grind","mokaPaper","ebFilter"],
+    defaults:{cups:"1", dose:7, water:70, mokaPaper:false, ebFilter:false}, ratio:10,
+    /* moke grandi: dose e acqua oltre i limiti degli altri metodi */
+    ranges:{dose:{max:120}, water:{max:1200, step:5}},
+    /* dose di partenza indicativa per numero di tazze (poi si regola a mano) */
+    cupsDose:{"1":7, "2":11, "3":16, "4":20, "6":30, "9":45, "18":90}},
+  mokapump:         {label:"Moka Pump", fields:["dose","water","temp","grind","preinf","time","mokaPaper","ebFilter"],
+    defaults:{dose:17, water:170, temp:85, preinf:0, time:0, mokaPaper:false, ebFilter:false}, ratio:10},
+  frenchpress:      {label:"French Press", fields:["dose","water","temp","grind","steep"],
+    defaults:{dose:30, water:480, temp:94, steep:240}, ratio:16},
 };
 const LEGACY_METHODS = {espresso:"Espresso", french:"French press", coldbrew:"Cold brew", altro:"Altro"};
 const methodLabel = k => METHODS[k]?.label || LEGACY_METHODS[k] || k;
@@ -567,7 +576,8 @@ function brewParams(b){
   for (const k of DISPLAY_ORDER){
     const v = p[k];
     if (v == null || v === "") continue;
-    if ((k === "time" || k === "bypass") && v === 0) continue;
+    if ((k === "time" || k === "bypass" || k === "preinf" || k === "steep") && v === 0) continue;
+    if (FIELDS[k] && FIELDS[k].type === "check" && !v) continue;
     out.push([k === "bypass" ? "Bypass" : (FIELDS[k]?.label || k), k, v]);
   }
   const r = ratioText(b.method, p);
@@ -836,7 +846,7 @@ function catalogSheet(){
   $("#ks-q").addEventListener("input", draw);
   $("#ks-list").addEventListener("click", e => { const b = e.target.closest("[data-entry]"); if (!b) return; const k = S.catalog.get(b.dataset.entry); if (k){ s.close(); bagSheet(k, null); } });
   $("#ks-new").addEventListener("click", () => { const q = $("#ks-q").value.trim(); s.close(); entrySheet(null, {name:q}); });
-  setTimeout(() => $("#ks-q").focus(), 50);
+  setTimeout(() => { const ae = document.activeElement; if (!ae || ae === document.body || !s.el.contains(ae) || ae.matches("[data-close]")) $("#ks-q").focus(); }, 50);
 }
 
 const bagFieldsHtml = b => '<div class="grid2">' +
@@ -939,7 +949,7 @@ function entrySheet(k, opts){
   $("#cf-roaster").addEventListener("input", drawDupes);
   $("#cf-dupes").addEventListener("click", e => { const b = e.target.closest("[data-use]"); if (!b) return; const h = S.catalog.get(b.dataset.use); if (h){ s.close(); bagSheet(h, null); } });
   drawDupes();
-  if (isNew) setTimeout(() => $("#cf-name").focus(), 50);
+  if (isNew) setTimeout(() => { const ae = document.activeElement; if (!ae || ae === document.body || !s.el.contains(ae) || ae.matches("[data-close]")) $("#cf-name").focus(); }, 50);
 
   const del = $("#cf-del");
   if (del) del.addEventListener("click", async () => {
@@ -1040,7 +1050,7 @@ function grinderSheet(g, onSaved){
     setBurrs(false);
     tpl.querySelectorAll("[data-tpl]").forEach(x => x.setAttribute("aria-checked", String(x === b)));
   });
-  if (isNew) setTimeout(() => $("#gf-brand").focus(), 50);
+  if (isNew) setTimeout(() => { const ae = document.activeElement; if (!ae || ae === document.body || !s.el.contains(ae) || ae.matches("[data-close]")) $("#gf-brand").focus(); }, 50);
 
   const del = $("#gf-del");
   if (del) del.addEventListener("click", async () => {
@@ -1252,7 +1262,7 @@ function machineSheet(m, onSaved){
     '<button type="submit" class="btn primary" id="mf-save">'+(isNew ? "Aggiungi" : "Salva")+"</button></div></form>";
   const s = openSheet(isNew ? "Nuova macchina espresso" : "Modifica macchina", inner);
   const $ = sel => s.el.querySelector(sel);
-  if (isNew) setTimeout(() => $("#mf-brand").focus(), 50);
+  if (isNew) setTimeout(() => { const ae = document.activeElement; if (!ae || ae === document.body || !s.el.contains(ae) || ae.matches("[data-close]")) $("#mf-brand").focus(); }, 50);
   const del = $("#mf-del");
   if (del) del.addEventListener("click", async () => {
     if (!(await confirmBox("Eliminare “"+machineLabel(m)+"”? Le estrazioni già salvate mantengono il nome della macchina.", "Elimina"))) return;
@@ -1329,8 +1339,12 @@ function valueOut(k, v){
   if (f.dur) return v ? durFmt(v) : "0 s";
   return fmtNum(v) + (f.unit ? " " + f.unit : "");
 }
-function controlHtml(k, vals){
-  const f = FIELDS[k], v = vals[k], id = "bf-" + k;
+const fieldDef = (method, k) => ({...FIELDS[k], ...((METHODS[method] && METHODS[method].ranges && METHODS[method].ranges[k]) || {})});
+function controlHtml(k, vals, method){
+  const f = fieldDef(method, k), v = vals[k], id = "bf-" + k;
+  if (f.type === "check"){
+    return '<label class="check" for="'+id+'"><input type="checkbox" id="'+id+'" data-check="'+k+'"'+(v ? " checked" : "")+'><span class="t"><b>'+esc(f.label)+"</b></span></label>";
+  }
   if (f.type === "choice"){
     return '<div class="field"><span class="flabel">'+f.label+'</span><div class="seg" data-k="'+k+'" role="radiogroup" aria-label="'+f.label+'">' +
       f.options.map(o => '<button type="button" role="radio" data-v="'+esc(o)+'" aria-checked="'+(v===o)+'">'+esc(o)+"</button>").join("") + "</div></div>";
@@ -1437,7 +1451,7 @@ function brewSheet(coffee, b){
     if (btn) btn.onclick = () => { vals = {...methodDefaults(method), ...(last.params || {})}; if (last.params && last.params.grind != null && !last.params.grinder){ delete vals.grind; } bloomLinked = false; drawFields(); toast("Valori dell'ultima estrazione caricati"); };
   }
   function drawFields(){
-    $("#bf-fields").innerHTML = fieldsOf(method).map(k => FIELDS[k] && FIELDS[k].type ? controlHtml(k, vals) : "").join("");
+    $("#bf-fields").innerHTML = fieldsOf(method).map(k => FIELDS[k] && FIELDS[k].type ? controlHtml(k, vals, method) : "").join("");
     updateCalc();
   }
   function setVal(k, v, fromInput){
@@ -1448,7 +1462,7 @@ function brewSheet(coffee, b){
       setVal("bloomWater", Math.min(150, Math.round(v * METHODS[method].bloomAuto)));
     }
     if (k === "dose" && methodRatio(method)){
-      const ok = fieldsOf(method).includes("yield") ? "yield" : "water", F = FIELDS[ok];
+      const ok = fieldsOf(method).includes("yield") ? "yield" : "water", F = fieldDef(method, ok);
       if (fieldsOf(method).includes(ok)) setVal(ok, snap(v * methodRatio(method), F.min, F.max, F.step));
     }
     if (k === "bloomWater" && fromInput) bloomLinked = false;
@@ -1459,7 +1473,7 @@ function brewSheet(coffee, b){
   const fieldsEl = $("#bf-fields");
   fieldsEl.addEventListener("input", e => {
     const r = e.target; if (r.type !== "range") return;
-    const k = r.closest("[data-k]").dataset.k, f = FIELDS[k];
+    const k = r.closest("[data-k]").dataset.k, f = fieldDef(method, k);
     if (f && f.slideStep){ const v = snap(Number(r.value), f.min, f.max, f.slideStep); if (v !== vals[k]) setVal(k, v); else r.value = v; return; }
     setVal(k, Number(r.value), true);
   });
@@ -1491,11 +1505,17 @@ function brewSheet(coffee, b){
         drawFields(); return;
       }
       let v = seg.dataset.bool ? opt.dataset.v === "1" : opt.dataset.v;
-      if (!seg.dataset.bool && vals[k] === v) v = null;
+      if (!seg.dataset.bool && vals[k] === v){ if (FIELDS[k] && FIELDS[k].required) return; v = null; }
       vals[k] = v;
+      /* moka: cambiando le tazze, dose (e acqua col rapporto) partono dal valore indicativo */
+      if (k === "cups" && METHODS[method] && METHODS[method].cupsDose && METHODS[method].cupsDose[v] != null) setVal("dose", METHODS[method].cupsDose[v]);
       seg.querySelectorAll("[data-v]").forEach(x => x.setAttribute("aria-checked", String(seg.dataset.bool ? (x.dataset.v === "1") === v : x.dataset.v === v)));
       updateCalc();
     }
+  });
+  fieldsEl.addEventListener("change", e => {
+    const c = e.target.closest("[data-check]"); if (!c) return;
+    vals[c.dataset.check] = c.checked; updateCalc();
   });
   $("#bf-at").addEventListener("change", updateCalc);
   $("#bf-defs").addEventListener("click", async e => {
