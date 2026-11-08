@@ -4,13 +4,13 @@
    ogni membro dovrà accettare di nuovo. */
 window.DIARIO_LEGAL = (() => {
   const CONTACT = "alessio.lp95@gmail.com";
-  const VERSION = "2026-11-08";
+  const VERSION = "2026-11-08.2";
   const UPDATED = "8 novembre 2026";
   const mail = '<a href="mailto:' + CONTACT + '">' + CONTACT + "</a>";
 
   const summary = [
     "È un progetto amatoriale e gratuito, su invito, gestito da Alessio.",
-    "Il catalogo dei caffè, il tuo nickname e le estrazioni che scegli di condividere li vedono gli altri membri; il resto (dispensa, estrazioni non condivise, macinini, macchine) è privato.",
+    "Il catalogo dei caffè, il tuo nickname e le estrazioni che scegli di condividere li vedono gli altri membri; dei macinini vedono solo il modello e la scala, come modelli pronti, senza sapere chi li usa; il resto (dispensa, estrazioni non condivise, macchine) è privato.",
     "I dati stanno su Supabase, in un server a Francoforte. Niente pubblicità, statistiche o tracciamento.",
     "Le foto che carichi sono raggiungibili da chi ha il loro link: carica solo foto delle confezioni, scattate da te.",
     "Non ci sono garanzie: fai ogni tanto “Esporta backup”.",
@@ -36,7 +36,8 @@ window.DIARIO_LEGAL = (() => {
 <h3>Chi vede cosa</h3>
 <ul>
 <li><b>Tutti i membri</b> vedono il catalogo dei caffè (con il nickname di chi ha creato ogni scheda), i nickname e le estrazioni che scegli di condividere nella Community spuntando la casella apposita.</li>
-<li><b>Solo tu</b> vedi la tua dispensa, le estrazioni non condivise, macinini, macchine e impostazioni.</li>
+<li><b>Dei tuoi macinini</b> gli altri membri vedono solo marca, modello, macine e scala (minimo, massimo, step), proposti come modelli pronti quando aggiungono un macinino, insieme al numero di membri che usano lo stesso modello. Non vedono chi li usa né il resto dei dati.</li>
+<li><b>Solo tu</b> vedi la tua dispensa, le estrazioni non condivise, quali macinini usi, le macchine e le impostazioni.</li>
 <li><b>Le foto</b> sono conservate in uno spazio raggiungibile tramite link diretto: chi conosce il link di una foto può aprirla anche senza account.</li>
 <li><b>Il gestore</b>, per ragioni tecniche, ha accesso all'archivio. Lo consulta solo per manutenzione, per risolvere problemi o su tua richiesta.</li>
 </ul>

@@ -334,7 +334,7 @@ const BAG_FIELDS = ["roastDate","weight","price","finished","finishedAt"];
 let db = null, assets = null;
 const S = {
   catalog:new Map(), bags:new Map(), brews:[], grinders:new Map(), profiles:new Map(), counts:new Map(),
-  machines:new Map(), feed:[], communityFilter:null, cfilter:"all", pairs:[],
+  machines:new Map(), feed:[], communityFilter:null, cfilter:"all", pairs:[], presets:[],
   isAdmin:false, loaded:false, error:null, slow:false, filter:"all",
 };
 const app = document.getElementById("app");
@@ -1013,8 +1013,9 @@ function grinderSheet(g, onSaved){
   const isDefault = !isNew && defaultGrinderId() === g.id;
   const numField = (id, label, val, hint) => '<div class="field"><label for="'+id+'">'+label+'</label><input class="numin" type="text" inputmode="decimal" id="'+id+'" value="'+esc(val != null ? fmtNum(val) : "")+'">' + (hint ? '<p class="hint">'+hint+"</p>" : "") + "</div>";
   const inner = '<form id="gf" novalidate>' +
-    (isNew ? '<div class="field"><span class="flabel">Parti da un modello (facoltativo)</span><div class="seg small" id="gf-tpl">' +
-      GRINDER_TEMPLATES.map(t => '<button type="button" data-tpl="'+t.key+'">'+esc([t.brand, t.model].filter(Boolean).join(" "))+"</button>").join("") + "</div></div>" : "") +
+    (isNew ? '<div class="field"><label for="gf-tpl">Parti da un modello (facoltativo)</label><select id="gf-tpl"><option value="">Scegli tra i macinini della community…</option>' +
+      grinderPresets().map((t, i) => '<option value="'+i+'">'+esc(grinderLabel(t) + " · " + fmtNum(t.min) + "–" + fmtNum(t.max) + ", step " + fmtNum(t.step) + (t.members ? " · " + t.members + (t.members === 1 ? " membro" : " membri") : ""))+"</option>").join("") +
+      '</select><p class="hint">Riempie i campi qui sotto: controlla che la scala corrisponda al tuo macinino.</p></div>' : "") +
     '<div class="grid2">' +
       '<div class="field"><label for="gf-brand">Marca</label><input type="text" id="gf-brand" value="'+esc(g.brand || "")+'" placeholder="es. Comandante"></div>' +
       '<div class="field"><label for="gf-model">Modello *</label><input type="text" id="gf-model" value="'+esc(g.model || "")+'" placeholder="es. C40 MK4"></div>' +
@@ -1042,13 +1043,13 @@ function grinderSheet(g, onSaved){
   const defSeg = $("#gf-def");
   if (defSeg) defSeg.addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b) return; makeDefault = b.dataset.v === "1"; defSeg.querySelectorAll("[data-v]").forEach(x => x.setAttribute("aria-checked", String((x.dataset.v === "1") === makeDefault))); });
   const tpl = $("#gf-tpl");
-  if (tpl) tpl.addEventListener("click", e => {
-    const b = e.target.closest("[data-tpl]"); if (!b) return;
-    const t = GRINDER_TEMPLATES.find(x => x.key === b.dataset.tpl);
-    $("#gf-brand").value = t.brand; $("#gf-model").value = t.model;
+  const presets = grinderPresets();
+  if (tpl) tpl.addEventListener("change", () => {
+    const t = presets[Number(tpl.value)]; if (!t || tpl.value === "") return;
+    $("#gf-brand").value = t.brand || ""; $("#gf-model").value = t.model || "";
     $("#gf-min").value = fmtNum(t.min); $("#gf-max").value = fmtNum(t.max); $("#gf-step").value = fmtNum(t.step);
-    setBurrs(false);
-    tpl.querySelectorAll("[data-tpl]").forEach(x => x.setAttribute("aria-checked", String(x === b)));
+    const custom = t.burrs && t.burrs !== "Standard";
+    setBurrs(custom); if (custom) $("#gf-burrname").value = t.burrs;
   });
   if (isNew) setTimeout(() => { const ae = document.activeElement; if (!ae || ae === document.body || !s.el.contains(ae) || ae.matches("[data-close]")) $("#gf-brand").focus(); }, 50);
 
@@ -1081,7 +1082,7 @@ function grinderSheet(g, onSaved){
       await retryOnce(() => db.collection("grinders").doc(id).set(data));
       if (makeDefault && meta().defaultGrinder !== id) await setMeta({defaultGrinder: id}).catch(() => {});
       else if (!makeDefault && meta().defaultGrinder === id) await setMeta({defaultGrinder: null}).catch(() => {});
-      s.close(); render(); toast(isNew ? "Macinino aggiunto" : "Macinino aggiornato");
+      s.close(); render(); loadPresets(); toast(isNew ? "Macinino aggiunto" : "Macinino aggiornato");
       if (onSaved) onSaved(S.grinders.get(id));
     } catch(e2){ btn.disabled = false; btn.textContent = isNew ? "Aggiungi" : "Salva"; toast(errMsg(e2)); }
   });
@@ -1736,7 +1737,7 @@ let cacheTimer = null;
 function saveCache(){
   clearTimeout(cacheTimer);
   cacheTimer = setTimeout(() => {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({u: me(), catalog:[...S.catalog.values()], bags:[...S.bags.values()], brews:S.brews, grinders:[...S.grinders.values()], machines:[...S.machines.values()], feed:S.feed, pairs:S.pairs, profiles:[...S.profiles], counts:[...S.counts], isAdmin:S.isAdmin})); } catch {}
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({u: me(), catalog:[...S.catalog.values()], bags:[...S.bags.values()], brews:S.brews, grinders:[...S.grinders.values()], machines:[...S.machines.values()], feed:S.feed, pairs:S.pairs, presets:S.presets, profiles:[...S.profiles], counts:[...S.counts], isAdmin:S.isAdmin})); } catch {}
   }, 300);
 }
 function loadCache(){
@@ -1746,7 +1747,7 @@ function loadCache(){
     S.catalog = new Map(c.catalog.map(x => [x.id, x])); S.bags = new Map(c.bags.map(x => [x.id, x]));
     S.brews = c.brews; sortBrews(); S.grinders = new Map(c.grinders.map(x => [x.id, x]));
     S.profiles = new Map(c.profiles || []); S.counts = new Map(c.counts || []); S.isAdmin = !!c.isAdmin;
-    S.machines = new Map((c.machines || []).map(x => [x.id, x])); S.feed = c.feed || []; S.pairs = c.pairs || []; sortBrews();
+    S.machines = new Map((c.machines || []).map(x => [x.id, x])); S.feed = c.feed || []; S.pairs = c.pairs || []; S.presets = c.presets || []; sortBrews();
     S.loaded = true; return true;
   } catch { return false; }
 }
@@ -1818,6 +1819,22 @@ async function fetchAll(table, cols){
   }
   return out;
 }
+/* modelli di macinino: quelli della community (anonimi) più i modelli pronti dell'app, senza doppioni */
+async function loadPresets(){
+  try {
+    const {data, error} = await sb.rpc("grinder_presets");
+    if (!error && Array.isArray(data)){ S.presets = data.map(r => ({brand: r.brand || "", model: r.model, burrs: r.burrs || "Standard", min: Number(r.min), max: Number(r.max), step: Number(r.step), members: Number(r.members)})); saveCache(); }
+  } catch {}
+}
+function grinderPresets(){
+  const best = new Map();
+  for (const t of [...S.presets, ...GRINDER_TEMPLATES.map(t => ({...t, members: 0}))]){
+    const key = norm(t.brand) + "|" + norm(t.model) + "|" + norm(t.burrs || "Standard");
+    const cur = best.get(key);
+    if (!cur || (t.members || 0) > (cur.members || 0)) best.set(key, t);
+  }
+  return [...best.values()].sort((a, b) => (b.members || 0) - (a.members || 0) || grinderLabel(a).localeCompare(grinderLabel(b), "it"));
+}
 async function loadCounts(){
   try {
     const {data, error} = await sb.rpc("catalog_counts");
@@ -1846,7 +1863,7 @@ async function refresh(){
     S.isAdmin = a.some(r => r.user_id === me());
     S.loaded = true; S.offline = false; S.error = null;
     saveCache();
-    loadCounts();
+    loadCounts(); loadPresets();
   } catch(e){
     S.offline = true;
     if (!S.loaded) S.error = "Non riesco a raggiungere l'archivio. Controlla la connessione e riapri l'app.";

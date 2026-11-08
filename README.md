@@ -5,9 +5,9 @@ Versione condivisa del Diario caffè per una piccola community di appassionati.
 - **Catalogo condiviso**: le schede dei caffè (nome, torrefazione, origine, varietà, processo, profilo, note dichiarate, foto)
   sono visibili a tutti i membri. Chi compra un caffè già catalogato lo aggiunge alla propria dispensa con un tocco.
   Una scheda la modificano chi l'ha creata e gli amministratori, e non si può eliminare finché qualcuno la ha in dispensa.
-- **Dati personali privati**: data di tostatura, peso, prezzo, macinini e macchine li vede solo chi li ha inseriti;
+- **Dati personali privati**: data di tostatura, peso, prezzo, macinini e macchine li vede solo chi li ha inseriti (dei macinini la community vede solo i modelli, in forma anonima, come modelli pronti);
   le estrazioni anche, salvo quelle che si sceglie di condividere nella Community.
-- **Macinini personalizzati**: marca, modello, macine (standard o un nome a scelta), valore minimo, massimo e step minimo.
+- **Macinini personalizzati**: marca, modello, macine (standard o un nome a scelta), valore minimo, massimo e step minimo. Nel modulo "Nuovo macinino" si può partire da un modello già usato da altri membri (funzione `grinder_presets` del database: restituisce solo marca, modello, macine, scala e quanti membri lo usano, mai chi).
 - **Predefiniti per metodo**: ognuno può salvare i propri valori di partenza (dose, resa/acqua, temperatura, macinino e macinatura…).
 - **Macchine espresso**: ognuno registra le proprie (marca facoltativa, modello) e le sceglie negli espressi.
 - **Community**: salvando un'estrazione si può spuntare "Condividi nella Community" (disattivato di default).

@@ -10,7 +10,8 @@
 --   brews     le estrazioni: private, salvo quelle che il proprietario sceglie di condividere
 --             nella sezione Community (is_public): quelle le leggono tutti i membri.
 --   machines  le macchine espresso di ciascuno: private.
---   grinders  i macinini di ciascuno: privati.
+--   grinders  i macinini di ciascuno: privati; grinder_presets() mostra agli altri solo i modelli
+--             (marca, modello, macine, scala) senza dire chi li usa.
 --   profiles  il nome con cui ognuno compare nel catalogo: visibile ai membri.
 --   catalog_pairs  coppie di schede segnalate come doppioni dai membri, o segnate come "non doppioni"
 --             dagli amministratori. Ognuno vede le proprie segnalazioni, gli amministratori tutte.
@@ -227,6 +228,25 @@ begin
 end $$;
 revoke execute on function public.merge_catalog(text, text) from public, anon;
 grant execute on function public.merge_catalog(text, text) to authenticated;
+
+-- Modelli di macinino usati nella community, da proporre come modelli pronti:
+-- solo marca, modello, macine e scala, con il numero di membri che li usano (mai chi).
+create or replace function public.grinder_presets()
+returns table (brand text, model text, burrs text, min numeric, max numeric, step numeric, members bigint)
+language sql stable security definer set search_path = public
+as $$
+  select coalesce(g.data ->> 'brand', ''), g.data ->> 'model', coalesce(nullif(g.data ->> 'burrs', ''), 'Standard'),
+         (g.data ->> 'min')::numeric, (g.data ->> 'max')::numeric, (g.data ->> 'step')::numeric,
+         count(distinct g.owner)
+    from public.grinders g
+   where coalesce(g.data ->> 'model', '') <> ''
+     and jsonb_typeof(g.data -> 'min') = 'number'
+     and jsonb_typeof(g.data -> 'max') = 'number'
+     and jsonb_typeof(g.data -> 'step') = 'number'
+   group by 1, 2, 3, 4, 5, 6
+$$;
+revoke execute on function public.grinder_presets() from public, anon;
+grant execute on function public.grinder_presets() to authenticated;
 
 -- Quanti membri hanno ogni caffè in dispensa (solo il numero, non chi).
 create or replace function public.catalog_counts()
