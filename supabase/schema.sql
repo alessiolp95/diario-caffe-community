@@ -12,6 +12,10 @@
 --   machines  le macchine espresso di ciascuno: private.
 --   grinders  i macinini di ciascuno: privati.
 --   profiles  il nome con cui ognuno compare nel catalogo: visibile ai membri.
+--   catalog_pairs  coppie di schede segnalate come doppioni dai membri, o segnate come "non doppioni"
+--             dagli amministratori. Ognuno vede le proprie segnalazioni, gli amministratori tutte.
+--   merge_catalog()  unisce due schede doppione (solo amministratori): sposta su quella tenuta
+--             le confezioni e le estrazioni di tutti i membri ed elimina l'altra.
 --   admins    gli amministratori: possono modificare ed eliminare qualsiasi scheda del catalogo
 --             (e la sua foto). Si aggiungono solo da qui, mai dall'app:
 --             insert into public.admins select id from auth.users where email = 'nome@esempio.it';
@@ -77,6 +81,16 @@ as $$ select exists (select 1 from public.admins where user_id = auth.uid()) $$;
 revoke execute on function public.is_admin() from public, anon;
 grant execute on function public.is_admin() to authenticated;
 
+create table if not exists public.catalog_pairs (
+  a text not null references public.catalog (id) on delete cascade,
+  b text not null references public.catalog (id) on delete cascade,
+  status text not null default 'reported' check (status in ('reported', 'dismissed')),
+  reported_by uuid default auth.uid() references auth.users on delete set null,
+  created_at timestamptz not null default now(),
+  primary key (a, b),
+  check (a < b)
+);
+
 create index if not exists coffees_catalog_idx on public.coffees (catalog_id);
 create index if not exists coffees_owner_idx on public.coffees (owner);
 create index if not exists brews_coffee_idx on public.brews (coffee_id);
@@ -94,6 +108,7 @@ alter table public.brews    enable row level security;
 alter table public.grinders enable row level security;
 alter table public.admins   enable row level security;
 alter table public.machines enable row level security;
+alter table public.catalog_pairs enable row level security;
 
 -- amministratori: ognuno vede solo se lo è lui; nessuna scrittura dall'app
 drop policy if exists "admins: lettura propria" on public.admins;
@@ -151,6 +166,67 @@ create policy "machines: solo il proprietario" on public.machines
 drop policy if exists "grinders: solo il proprietario" on public.grinders;
 create policy "grinders: solo il proprietario" on public.grinders
   for all to authenticated using (owner = (select auth.uid())) with check (owner = (select auth.uid()));
+
+-- doppioni: i membri segnalano, gli amministratori vedono tutto e decidono
+drop policy if exists "pairs: lettura" on public.catalog_pairs;
+create policy "pairs: lettura" on public.catalog_pairs
+  for select to authenticated using (reported_by = (select auth.uid()) or (select public.is_admin()));
+drop policy if exists "pairs: segnalazione" on public.catalog_pairs;
+create policy "pairs: segnalazione" on public.catalog_pairs
+  for insert to authenticated
+  with check ((status = 'reported' and reported_by = (select auth.uid())) or (select public.is_admin()));
+drop policy if exists "pairs: gestione admin" on public.catalog_pairs;
+create policy "pairs: gestione admin" on public.catalog_pairs
+  for update to authenticated using ((select public.is_admin())) with check ((select public.is_admin()));
+drop policy if exists "pairs: eliminazione admin" on public.catalog_pairs;
+create policy "pairs: eliminazione admin" on public.catalog_pairs
+  for delete to authenticated using ((select public.is_admin()));
+
+-- Unisce due schede doppione: tiene keep_id, completa i suoi campi vuoti con quelli di drop_id,
+-- sposta su keep_id le confezioni e le estrazioni di tutti i membri ed elimina drop_id.
+-- Tutto o niente. Restituisce quante confezioni ed estrazioni sono state spostate e la foto
+-- della scheda eliminata (da cancellare dallo spazio foto, se non è stata adottata).
+create or replace function public.merge_catalog(keep_id text, drop_id text)
+returns jsonb
+language plpgsql security definer set search_path = public
+as $$
+declare
+  k public.catalog; d public.catalog;
+  merged jsonb; key text; val jsonb; nb int; nbr int; drop_photo text;
+begin
+  if not public.is_admin() then
+    raise exception 'Solo gli amministratori possono unire le schede' using errcode = '42501';
+  end if;
+  if keep_id = drop_id then raise exception 'Le due schede sono la stessa' using errcode = '22023'; end if;
+  select * into k from public.catalog where id = keep_id for update;
+  if not found then raise exception 'Scheda da tenere non trovata' using errcode = 'P0002'; end if;
+  select * into d from public.catalog where id = drop_id for update;
+  if not found then raise exception 'Scheda da eliminare non trovata' using errcode = 'P0002'; end if;
+
+  merged := k.data;
+  for key, val in select * from jsonb_each(d.data) loop
+    if key <> 'createdAt' and (not merged ? key or merged -> key = 'null'::jsonb or merged ->> key = '') then
+      merged := merged || jsonb_build_object(key, val);
+    end if;
+  end loop;
+
+  update public.coffees
+     set catalog_id = keep_id, data = jsonb_set(data, '{catalogId}', to_jsonb(keep_id)), updated_at = now()
+   where catalog_id = drop_id;
+  get diagnostics nb = row_count;
+  update public.brews
+     set data = jsonb_set(data, '{catalogId}', to_jsonb(keep_id)), updated_at = now()
+   where data ->> 'catalogId' = drop_id;
+  get diagnostics nbr = row_count;
+  update public.catalog set data = merged, updated_at = now() where id = keep_id;
+  delete from public.catalog where id = drop_id;
+
+  drop_photo := nullif(d.data ->> 'photo', '');
+  if drop_photo is not null and drop_photo = coalesce(merged ->> 'photo', '') then drop_photo := null; end if;
+  return jsonb_build_object('bags', nb, 'brews', nbr, 'dropPhoto', drop_photo);
+end $$;
+revoke execute on function public.merge_catalog(text, text) from public, anon;
+grant execute on function public.merge_catalog(text, text) to authenticated;
 
 -- Quanti membri hanno ogni caffè in dispensa (solo il numero, non chi).
 create or replace function public.catalog_counts()

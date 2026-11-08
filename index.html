@@ -215,6 +215,17 @@ textarea{min-height:110px;resize:vertical;line-height:1.45}
 .item.static:hover{border-color:var(--line)}
 .sec{display:flex;flex-direction:column;gap:10px}
 .sec + .sec{padding-top:6px;border-top:1px solid var(--line)}
+.cmp{display:flex;flex-direction:column;gap:2px}
+.cmp-head,.cmp-row{display:grid;grid-template-columns:76px minmax(0,1fr) minmax(0,1fr);gap:8px;padding:7px 8px;border-radius:8px;font-size:14px;align-items:start}
+.cmp-row span{overflow-wrap:anywhere}
+.cmp-row.diff{background:color-mix(in srgb,var(--crema) 22%,transparent)}
+.cmp-lbl{color:var(--muted);font-size:12px;padding-top:2px}
+.cmp-col{display:flex;flex-direction:column;gap:3px;min-width:0}
+.cmp-tag{font-weight:700;font-family:var(--display,inherit)}
+.cmp-photo{width:100%;aspect-ratio:1;object-fit:contain;background:#fff;border-radius:8px;border:1px solid var(--line)}
+.cmp-photo.ph{display:grid;place-items:center;color:var(--muted);background:var(--surface)}
+.cmp-warn{border:1px solid var(--crema);background:color-mix(in srgb,var(--crema) 14%,transparent);border-radius:12px;padding:10px 12px;font-size:14px}
+.cmp-warn ul{margin:6px 0 0;padding-left:18px}
 .dupes{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--crema);border-radius:12px;padding:10px 12px}
 .dupes:empty{display:none}
 .byline{font-size:13px;color:var(--muted);margin:0}
@@ -314,7 +325,7 @@ const BAG_FIELDS = ["roastDate","weight","price","finished","finishedAt"];
 let db = null, assets = null;
 const S = {
   catalog:new Map(), bags:new Map(), brews:[], grinders:new Map(), profiles:new Map(), counts:new Map(),
-  machines:new Map(), feed:[], communityFilter:null, cfilter:"all",
+  machines:new Map(), feed:[], communityFilter:null, cfilter:"all", pairs:[],
   isAdmin:false, loaded:false, error:null, slow:false, filter:"all",
 };
 const app = document.getElementById("app");
@@ -502,6 +513,7 @@ const navHtml = active => '<nav class="tabs" aria-label="Sezioni">' +
 function nudgesHtml(count){
   let h = "";
   if (!myName()) h += '<div class="nudge" role="status"><span>Scegli il tuo nickname: gli altri membri lo vedranno accanto ai caffè e alle estrazioni che condividi.</span><button class="btn" data-act="settings">Imposta</button></div>';
+  if (S.isAdmin){ const n = pendingPairs().length; if (n) h += '<div class="nudge" role="status"><span>' + n + (n === 1 ? " possibile doppione" : " possibili doppioni") + ' nel catalogo da controllare.</span><button class="btn" data-act="duplicates">Controlla</button></div>'; }
   if (!S.grinders.size) h += '<div class="nudge" role="status"><span>Aggiungi il tuo macinino per registrare la macinatura delle estrazioni.</span><button class="btn" data-act="new-grinder">+ Macinino</button></div>';
   return h + backupNudgeHtml(count);
 }
@@ -685,6 +697,7 @@ function renderDetail(c){
     (k ? '<p class="byline">Scheda del catalogo creata da '+esc(creatorName(k)) + (members > 1 ? " · comprato da "+members+" membri" : "") + (byAdmin ? ". Puoi modificarla come amministratore." : mine ? "" : ". Solo chi l'ha creata può modificarla.") + "</p>" : "") +
     '<div class="actions"><button class="btn" data-act="edit-bag">Modifica confezione</button>' +
     (mine ? '<button class="btn" data-act="edit-entry">Modifica scheda</button>' : "") +
+    '<button class="btn" data-act="dup-entry">' + (S.isAdmin ? "Unisci con un doppione" : "Segnala doppione") + "</button>" +
     (shared ? '<button class="btn" data-act="community-coffee">'+shared+(shared === 1 ? " estrazione" : " estrazioni")+' nella Community</button>' : "") +
     '<button class="btn" data-act="toggle-finished">'+(c.finished ? "Rimetti in dispensa" : "Segna come terminato")+"</button></div>" +
     "</div></article>";
@@ -716,6 +729,8 @@ app.addEventListener("click", e => {
   if (act === "home") go(null);
   else if (act === "community") goCommunity(null);
   else if (act === "info"){ location.hash = "info"; window.scrollTo(0, 0); }
+  else if (act === "dup-entry" && bag) duplicateFlow(S.catalog.get(bag.catalogId));
+  else if (act === "duplicates") duplicatesSheet();
   else if (act === "community-all") goCommunity(null);
   else if (act === "community-coffee" && bag) goCommunity(bag.catalogId);
   else if (act === "new-coffee") catalogSheet();
@@ -832,7 +847,7 @@ const bagFieldsHtml = b => '<div class="grid2">' +
 const readBagFields = $ => ({roastDate: $("#bg-roast").value || "", weight: numParse($("#bg-weight").value), price: numParse($("#bg-price").value)});
 
 /* Confezione nella propria dispensa (nuova o da modificare). */
-function bagSheet(k, bag){
+function bagSheet(k, bag, prefill){
   if (!k) return;
   const isNew = !bag; bag = bag || {};
   const already = isNew && bagsOf(k.id).some(b => !b.finished);
@@ -840,15 +855,17 @@ function bagSheet(k, bag){
       (k.roaster ? '<span class="sub">'+esc(k.roaster)+"</span>" : "") +
       ([k.origin, k.variety, k.process].filter(Boolean).length ? '<span class="sub">'+[k.origin, k.variety, k.process].filter(Boolean).map(esc).join(" · ")+"</span>" : "") +
       (k.tasting ? '<span class="by">Note dichiarate: '+esc(k.tasting)+"</span>" : "") + "</div></div>" +
-    (canEdit(k) ? '<button type="button" class="btn small" id="bg-edit-entry" style="align-self:flex-start">Modifica scheda</button>' : "") +
+    '<div class="actions">' + (canEdit(k) ? '<button type="button" class="btn small" id="bg-edit-entry">Modifica scheda</button>' : "") +
+      '<button type="button" class="btn small" id="bg-dup">' + (S.isAdmin ? "Unisci con un doppione" : "Segnala doppione") + "</button></div>" +
     (already ? '<p class="hint">Hai già questo caffè in dispensa: verrà aggiunta un\'altra confezione.</p>' : "") +
-    '<form id="bg" novalidate><span class="flabel">La tua confezione</span>' + bagFieldsHtml(bag) +
+    '<form id="bg" novalidate><span class="flabel">La tua confezione</span>' + bagFieldsHtml(isNew && prefill ? prefill : bag) +
     '<div class="form-foot">' + (isNew ? "<span></span>" : '<button type="button" class="btn danger" id="bg-del">Togli dalla dispensa</button>') +
     '<button type="submit" class="btn primary" id="bg-save">'+(isNew ? "Aggiungi alla dispensa" : "Salva")+"</button></div></form>";
   const s = openSheet(isNew ? "Aggiungi alla dispensa" : "Modifica confezione", inner);
   const $ = sel => s.el.querySelector(sel);
   const ee = $("#bg-edit-entry");
   if (ee) ee.addEventListener("click", () => { s.close(); entrySheet(k); });
+  $("#bg-dup").addEventListener("click", () => { s.close(); duplicateFlow(k); });
   const del = $("#bg-del");
   if (del) del.addEventListener("click", async () => {
     const n = brewsOf(bag.id).length;
@@ -882,7 +899,8 @@ function entrySheet(k, opts){
       '<input type="file" id="cf-photo" accept="image/*"></label>' + (k.photo ? '<button type="button" class="btn ghost small" id="cf-rmphoto">Rimuovi foto</button>' : "");
   const inner = '<form id="cf" novalidate>' + (isNew ? '<p class="hint" style="margin-top:-8px">La scheda sarà visibile a tutti i membri. Data di tostatura, peso e prezzo restano solo tuoi.</p>' : "") + photoBlock +
     '<div class="field"><label for="cf-name">Nome del caffè *</label><input type="text" id="cf-name" required value="'+v("name")+'" placeholder="es. Etiopia Guji Hambela"></div>' +
-    '<div class="field"><label for="cf-roaster">Torrefazione</label><input type="text" id="cf-roaster" value="'+v("roaster")+'"></div>' +
+    '<div class="field"><label for="cf-roaster">Torrefazione</label><input type="text" id="cf-roaster" list="dl-roasters" autocomplete="off" value="'+v("roaster")+'"><datalist id="dl-roasters">' +
+      [...new Set([...S.catalog.values()].map(x => (x.roaster || "").trim()).filter(Boolean))].sort((x, y) => x.localeCompare(y, "it")).map(r => '<option value="'+esc(r)+'">').join("") + "</datalist></div>" +
     '<div class="dupes" id="cf-dupes"></div>' +
     '<div class="grid2">' +
       '<div class="field"><label for="cf-origin">Origine</label><input type="text" id="cf-origin" value="'+v("origin")+'" placeholder="Paese, regione"></div>' +
@@ -945,6 +963,17 @@ function entrySheet(k, opts){
     e.preventDefault();
     const name = $("#cf-name").value.trim();
     if (!name){ $("#cf-name").focus(); toast("Scrivi il nome del caffè"); return; }
+    if (isNew){
+      const draft = {draft: true, name, roaster: $("#cf-roaster").value.trim(), origin: $("#cf-origin").value.trim(), variety: $("#cf-variety").value.trim(),
+        process: $("#cf-process").value.trim(), profile: $("#cf-profile").value, tasting: $("#cf-tasting").value.trim(),
+        previewUrl: pendingFile ? URL.createObjectURL(pendingFile) : null};
+      const dups = likelyDuplicates(draft, null);
+      if (dups.length){
+        const choice = await sameCoffeeSheet(draft, dups[0]);
+        if (choice === "use"){ const pre = readBagFields($); s.close(); bagSheet(dups[0], null, pre); return; }
+        if (choice !== "new") return;
+      }
+    }
     const btn = $("#cf-save"); btn.disabled = true; btn.textContent = pendingFile ? "Carico la foto…" : "Salvo…";
     try {
       let photo = removePhoto ? null : (k.photo || null);
@@ -1048,6 +1077,169 @@ function grinderSheet(g, onSaved){
   });
 }
 
+/* ---------- doppioni nel catalogo ---------- */
+/* parole che non distinguono un caffè o una torrefazione */
+const GENERIC = new Set(["coffee","coffees","caffe","cafe","roasters","roaster","roastery","roasting","torrefazione","torrefattori","specialty","company","co","the","and","di","de","del","della","la","las","el","los","le","il","lo","e","y"]);
+const toks = s => norm(s).replace(/[^a-z0-9]+/g, " ").split(" ").filter(w => w.length > 1 && !GENERIC.has(w));
+/* true = stessa torrefazione (anche scritta diversamente), false = diversa, null = non indicata */
+function roasterSame(a, b){ const A = toks(a), B = toks(b); if (!A.length || !B.length) return null; return A.some(w => B.includes(w)); }
+function nameScore(a, b){
+  if (norm(a) && norm(a) === norm(b)) return 1;
+  const A = new Set(toks(a)), B = new Set(toks(b)); if (!A.size || !B.size) return 0;
+  let i = 0; A.forEach(w => { if (B.has(w)) i++; });
+  return Math.max(i / (A.size + B.size - i), 0.9 * i / Math.min(A.size, B.size));
+}
+const dupScore = (x, y) => roasterSame(x.roaster, y.roaster) === false ? 0 : nameScore(x.name, y.name);
+const DUP_MIN = 0.75;
+const pairKey = (a, b) => a < b ? a + "|" + b : b + "|" + a;
+function likelyDuplicates(x, excludeId){
+  return [...S.catalog.values()].filter(k => k.id !== excludeId)
+    .map(k => [k, dupScore(x, k)]).filter(([, sc]) => sc >= DUP_MIN).sort((p, q) => q[1] - p[1]).map(([k]) => k);
+}
+/* coppie da controllare (amministratori): segnalate dai membri + trovate automaticamente, meno quelle "non doppioni" */
+function pendingPairs(){
+  const dismissed = new Set(S.pairs.filter(p => p.status === "dismissed").map(p => pairKey(p.a, p.b)));
+  const out = new Map();
+  for (const p of S.pairs) if (p.status === "reported" && S.catalog.has(p.a) && S.catalog.has(p.b)) out.set(pairKey(p.a, p.b), {a: p.a, b: p.b, by: p.reported_by});
+  const list = [...S.catalog.values()];
+  for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++){
+    const key = pairKey(list[i].id, list[j].id);
+    if (!out.has(key) && !dismissed.has(key) && dupScore(list[i], list[j]) >= DUP_MIN) out.set(key, {a: list[i].id, b: list[j].id, auto: true});
+  }
+  return [...out.values()].filter(p => !dismissed.has(pairKey(p.a, p.b)));
+}
+const CMP_FIELDS = [["name","Nome"],["roaster","Torrefazione"],["origin","Origine"],["variety","Varietà"],["process","Processo"],["profile","Profilo"],["tasting","Note dichiarate"]];
+function criticalDiffs(a, b){
+  const w = [];
+  if (roasterSame(a.roaster, b.roaster) === false) w.push("Torrefazione diversa: " + a.roaster + " / " + b.roaster);
+  for (const [f, l] of [["process","Processo diverso"],["variety","Varietà diversa"],["profile","Profilo di tostatura diverso"]])
+    if (a[f] && b[f] && norm(a[f]) !== norm(b[f])) w.push(l + ": " + a[f] + " / " + b[f]);
+  return w;
+}
+const sharedCount = k => communityBrews().filter(x => brewCatalogId(x) === k.id).length;
+function compareHtml(a, b, la, lb){
+  const col = (k, l) => '<div class="cmp-col"><span class="cmp-tag">' + esc(l) + "</span>" +
+    (k.previewUrl || k.photo ? '<img class="cmp-photo" src="' + esc(k.previewUrl || photoUrl(k.photo)) + '" alt="">' : '<div class="cmp-photo ph">' + beanSvg + "</div>") +
+    (k.draft ? '<span class="small muted">la tua nuova scheda</span>'
+      : '<span class="small muted">di ' + esc(creatorName(k)) + '</span><span class="small muted">' + (S.counts.get(k.id) || 0) + " in dispensa · " + sharedCount(k) + " condivise</span>") + "</div>";
+  const warn = criticalDiffs(a, b);
+  const rows = CMP_FIELDS.map(([f, l]) => {
+    const va = a[f] || "", vb = b[f] || "", diff = norm(va) !== norm(vb);
+    const cell = v => v ? esc(v) : '<span class="muted">—</span>';
+    return '<div class="cmp-row' + (diff ? " diff" : "") + '"><span class="cmp-lbl">' + l + "</span><span>" + cell(va) + "</span><span>" + cell(vb) + "</span></div>";
+  });
+  return (warn.length ? '<div class="cmp-warn"><b>Attenzione: potrebbero essere due caffè diversi</b><ul>' + warn.map(x => "<li>" + esc(x) + "</li>").join("") + "</ul></div>" : "") +
+    '<div class="cmp"><div class="cmp-head"><span></span>' + col(a, la) + col(b, lb) + "</div>" + rows.join("") +
+    '<p class="hint" style="margin:4px 0 0">Le righe evidenziate sono quelle diverse.</p></div>';
+}
+/* alla creazione: "è lo stesso caffè?" → "use" | "new" | null */
+function sameCoffeeSheet(draft, existing){
+  return new Promise(res => {
+    const s = openSheet("È lo stesso caffè?", '<p style="margin:0">Nel catalogo c\'è già una scheda molto simile. Se è lo stesso caffè, usa quella: così le estrazioni di tutti restano insieme.</p>' +
+      compareHtml(draft, existing, "Nuova", "Nel catalogo") +
+      '<div class="form-foot" style="flex-wrap:wrap;gap:8px"><button type="button" class="btn" data-x="new">È un caffè diverso, crea la scheda</button><button type="button" class="btn primary" data-x="use">È lo stesso, usa quella del catalogo</button></div>');
+    let done = false;
+    const finish = v => { if (done) return; done = true; s.close(); res(v); };
+    s.el.querySelector(".form-foot").addEventListener("click", e => { const b = e.target.closest("[data-x]"); if (b) finish(b.dataset.x); });
+    s.el.querySelector("[data-close]").addEventListener("click", () => finish(null));
+  });
+}
+/* scegli un'altra scheda del catalogo (le più simili in alto) */
+function pickEntrySheet(k, title, onPick){
+  const inner = '<p class="hint" style="margin-top:-8px">Quale scheda è un doppione di “' + esc(k.name) + "”?</p>" +
+    '<div class="field"><label for="pk-q" class="sr">Cerca</label><input type="search" id="pk-q" autocomplete="off" placeholder="Cerca nel catalogo…"></div><div class="list" id="pk-list"></div>';
+  const s = openSheet(title, inner);
+  const $ = sel => s.el.querySelector(sel);
+  const draw = () => {
+    const q = $("#pk-q").value;
+    let items = searchCatalog(q, k.id);
+    if (!q.trim()) items = items.map(x => [x, dupScore(k, x)]).sort((p, r) => r[1] - p[1]).map(([x]) => x);
+    $("#pk-list").innerHTML = items.slice(0, 60).map(entryCard).join("") || '<p class="hint">Nessun caffè trovato.</p>';
+  };
+  draw();
+  $("#pk-q").addEventListener("input", draw);
+  $("#pk-list").addEventListener("click", e => { const b = e.target.closest("[data-entry]"); if (!b) return; const o = S.catalog.get(b.dataset.entry); if (o){ s.close(); onPick(o); } });
+}
+/* membro: segnala agli amministratori; amministratore: apre direttamente l'unione */
+function duplicateFlow(k){
+  if (!k) return;
+  if (S.isAdmin) pickEntrySheet(k, "Unisci con un doppione", o => mergeSheet(k, o));
+  else pickEntrySheet(k, "Segnala un doppione", o => reportSheet(k, o));
+}
+function reportSheet(a, b){
+  const key = pairKey(a.id, b.id);
+  const already = S.pairs.some(p => pairKey(p.a, p.b) === key);
+  const s = openSheet("Segnala doppione", '<p style="margin:0">Gli amministratori controlleranno le due schede e, se sono lo stesso caffè, le uniranno. Le tue confezioni ed estrazioni non cambiano.</p>' +
+    compareHtml(a, b, "A", "B") +
+    '<div class="form-foot"><span></span><button type="button" class="btn primary" id="rp-go"' + (already ? " disabled" : "") + ">" + (already ? "Già segnalato" : "Segnala agli amministratori") + "</button></div>");
+  const btn = s.el.querySelector("#rp-go");
+  btn.addEventListener("click", async () => {
+    btn.disabled = true; btn.textContent = "Invio…";
+    const [x, y] = a.id < b.id ? [a.id, b.id] : [b.id, a.id];
+    const {error} = await sb.from("catalog_pairs").upsert({a: x, b: y, status: "reported", reported_by: me()}, {onConflict: "a,b", ignoreDuplicates: true});
+    if (error){ btn.disabled = false; btn.textContent = "Segnala agli amministratori"; toast(errMsg(wrapErr(error))); return; }
+    S.pairs.push({a: x, b: y, status: "reported", reported_by: me()}); saveCache();
+    s.close(); toast("Segnalazione inviata agli amministratori");
+  });
+}
+function mergeSheet(a, b, onDone){
+  if (!S.isAdmin || !a || !b) return;
+  const score = k => [S.counts.get(k.id) || 0, -(new Date(k.createdAt || 0).getTime())];
+  const sa = score(a), sb2 = score(b);
+  let keep = (sa[0] > sb2[0] || (sa[0] === sb2[0] && sa[1] >= sb2[1])) ? "a" : "b";
+  const inner = compareHtml(a, b, "A", "B") +
+    '<div class="field"><span class="flabel">Quale scheda tenere?</span><div class="seg" id="mg-keep" role="radiogroup" aria-label="Scheda da tenere">' +
+      '<button type="button" role="radio" data-v="a">Tieni A</button><button type="button" role="radio" data-v="b">Tieni B</button></div></div>' +
+    '<p class="hint" id="mg-sum" style="margin:0"></p>' +
+    '<div class="form-foot" style="flex-wrap:wrap;gap:8px"><button type="button" class="btn" id="mg-no">Non sono doppioni</button><button type="button" class="btn primary" id="mg-go">Unisci</button></div>';
+  const s = openSheet("Unisci schede", inner);
+  const $ = sel => s.el.querySelector(sel);
+  const draw = () => {
+    $("#mg-keep").querySelectorAll("[data-v]").forEach(x => x.setAttribute("aria-checked", String(x.dataset.v === keep)));
+    const K = keep === "a" ? a : b, D = keep === "a" ? b : a, L = keep === "a" ? "A" : "B", DL = keep === "a" ? "B" : "A";
+    const nD = S.counts.get(D.id) || 0;
+    $("#mg-sum").textContent = "Resta la scheda " + L + " (“" + K.name + "”). " +
+      (nD ? "Le confezioni di " + nD + (nD === 1 ? " membro" : " membri") + " e le loro estrazioni passano dalla " + DL + " alla " + L + ". " : "") +
+      "I campi vuoti della " + L + " vengono completati con quelli della " + DL + "; poi la " + DL + " viene eliminata.";
+  };
+  draw();
+  $("#mg-keep").addEventListener("click", e => { const x = e.target.closest("[data-v]"); if (x){ keep = x.dataset.v; draw(); } });
+  $("#mg-no").addEventListener("click", async () => {
+    const [x, y] = a.id < b.id ? [a.id, b.id] : [b.id, a.id];
+    const {error} = await sb.from("catalog_pairs").upsert({a: x, b: y, status: "dismissed"}, {onConflict: "a,b"});
+    if (error){ toast(errMsg(wrapErr(error))); return; }
+    S.pairs = S.pairs.filter(p => pairKey(p.a, p.b) !== pairKey(x, y)); S.pairs.push({a: x, b: y, status: "dismissed"}); saveCache();
+    s.close(); render(); toast("Segnate come schede diverse"); if (onDone) onDone();
+  });
+  $("#mg-go").addEventListener("click", async () => {
+    const K = keep === "a" ? a : b, D = keep === "a" ? b : a;
+    const warn = criticalDiffs(a, b).length ? " Attenzione: alcuni campi importanti sono diversi." : "";
+    if (!(await confirmBox("Unire le due schede tenendo “" + K.name + "” ed eliminare l'altra? Non si può annullare." + warn, "Unisci"))) return;
+    const btn = $("#mg-go"); btn.disabled = true; btn.textContent = "Unisco…";
+    const {data, error} = await sb.rpc("merge_catalog", {keep_id: K.id, drop_id: D.id});
+    if (error){ btn.disabled = false; btn.textContent = "Unisci"; toast(error.code === "42501" ? "Solo gli amministratori possono unire le schede." : errMsg(wrapErr(error))); return; }
+    if (data && data.dropPhoto) assets.delete(data.dropPhoto).catch(() => {});
+    s.close();
+    await refresh();
+    toast("Schede unite" + (data ? ": " + data.bags + (data.bags === 1 ? " confezione" : " confezioni") + " e " + data.brews + " estrazioni condivise spostate" : ""));
+    if (onDone) onDone();
+  });
+}
+function duplicatesSheet(){
+  const s = openSheet("Possibili doppioni", '<p class="hint" style="margin-top:-8px">Coppie segnalate dai membri o con nome e torrefazione molto simili. Tocca una coppia per confrontarle e decidere.</p><div class="list" id="dp-list"></div>');
+  const box = s.el.querySelector("#dp-list");
+  const draw = () => {
+    const pairs = pendingPairs();
+    box.innerHTML = pairs.length ? pairs.map(p => {
+      const A = S.catalog.get(p.a), B = S.catalog.get(p.b);
+      return '<button class="item" type="button" data-a="' + esc(p.a) + '" data-b="' + esc(p.b) + '"><span class="t"><b>' + esc(A.name) + " ↔ " + esc(B.name) + '</b><span class="small muted">' +
+        esc([A.roaster, B.roaster].filter(Boolean).join(" / ")) + " · " + (p.auto ? "trovata automaticamente" : "segnalata da " + esc(nick(p.by) || "un membro")) + "</span></span></button>";
+    }).join("") : '<p class="hint">Nessun possibile doppione da controllare.</p>';
+  };
+  draw();
+  box.addEventListener("click", e => { const x = e.target.closest("[data-a]"); if (x) mergeSheet(S.catalog.get(x.dataset.a), S.catalog.get(x.dataset.b), draw); });
+}
+
 /* ---------- macchine espresso ---------- */
 function machineSheet(m, onSaved){
   const isNew = !m; m = m || {};
@@ -1096,6 +1288,7 @@ function settingsSheet(){
       '<section class="sec"><div class="sec-head"><h3>Macinini</h3><button class="btn small" type="button" data-g="new">+ Macinino</button></div>' +
         (S.grinders.size ? grinderList().map(g => '<button class="item" type="button" data-g="'+esc(g.id)+'"><span class="t"><b>'+esc(grinderLabel(g))+'</b><span class="small muted num">'+fmtNum(g.min)+" – "+fmtNum(g.max)+" · step "+fmtNum(g.step)+"</span></span>"+(g.id === defId ? '<span class="pill fresh">predefinito</span>' : "")+"</button>").join("")
           : '<p class="hint">Nessun macinino. Aggiungine uno per registrare la macinatura.</p>') + "</section>" +
+      (S.isAdmin ? '<section class="sec"><div class="sec-head"><h3>Catalogo</h3></div><button class="item" type="button" data-dups="1"><span class="t"><b>Possibili doppioni</b><span class="small muted">' + pendingPairs().length + ' da controllare</span></span></button></section>' : "") +
       '<section class="sec"><div class="sec-head"><h3>Macchine espresso</h3><button class="btn small" type="button" data-m="new">+ Macchina</button></div>' +
         (S.machines.size ? machineList().map(m => '<button class="item" type="button" data-m="'+esc(m.id)+'"><span class="t"><b>'+esc(machineLabel(m))+"</b></span></button>").join("")
           : '<p class="hint">Nessuna macchina. Si sceglie nelle estrazioni espresso.</p>') + "</section>" +
@@ -1117,6 +1310,7 @@ function settingsSheet(){
   box.addEventListener("click", async e => {
     const g = e.target.closest("[data-g]");
     if (g){ grinderSheet(g.dataset.g === "new" ? null : S.grinders.get(g.dataset.g), () => draw()); return; }
+    if (e.target.closest("[data-dups]")){ duplicatesSheet(); return; }
     const mc = e.target.closest("[data-m]");
     if (mc){ machineSheet(mc.dataset.m === "new" ? null : S.machines.get(mc.dataset.m), () => draw()); return; }
     const r = e.target.closest("[data-reset]");
@@ -1532,7 +1726,7 @@ let cacheTimer = null;
 function saveCache(){
   clearTimeout(cacheTimer);
   cacheTimer = setTimeout(() => {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({u: me(), catalog:[...S.catalog.values()], bags:[...S.bags.values()], brews:S.brews, grinders:[...S.grinders.values()], machines:[...S.machines.values()], feed:S.feed, profiles:[...S.profiles], counts:[...S.counts], isAdmin:S.isAdmin})); } catch {}
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({u: me(), catalog:[...S.catalog.values()], bags:[...S.bags.values()], brews:S.brews, grinders:[...S.grinders.values()], machines:[...S.machines.values()], feed:S.feed, pairs:S.pairs, profiles:[...S.profiles], counts:[...S.counts], isAdmin:S.isAdmin})); } catch {}
   }, 300);
 }
 function loadCache(){
@@ -1542,7 +1736,7 @@ function loadCache(){
     S.catalog = new Map(c.catalog.map(x => [x.id, x])); S.bags = new Map(c.bags.map(x => [x.id, x]));
     S.brews = c.brews; sortBrews(); S.grinders = new Map(c.grinders.map(x => [x.id, x]));
     S.profiles = new Map(c.profiles || []); S.counts = new Map(c.counts || []); S.isAdmin = !!c.isAdmin;
-    S.machines = new Map((c.machines || []).map(x => [x.id, x])); S.feed = c.feed || []; sortBrews();
+    S.machines = new Map((c.machines || []).map(x => [x.id, x])); S.feed = c.feed || []; S.pairs = c.pairs || []; sortBrews();
     S.loaded = true; return true;
   } catch { return false; }
 }
@@ -1624,10 +1818,11 @@ let refreshing = false;
 async function refresh(){
   if (refreshing) return; refreshing = true;
   try {
-    const [k, c, b, g, p, a, m] = await Promise.all([
+    const [k, c, b, g, p, a, m, pr] = await Promise.all([
       fetchAll("catalog", TABLES.catalog.cols), fetchAll("coffees", "id,data"), fetchAll("brews", TABLES.brews.cols),
       fetchAll("grinders", "id,data"), fetchAll("profiles", "id,name"),
       fetchAll("admins", "user_id").catch(() => []), fetchAll("machines", "id,data").catch(() => []),
+      fetchAll("catalog_pairs", "a,b,status,reported_by").catch(() => []),
     ]);
     S.catalog = new Map(k.map(r => [r.id, {id: r.id, createdBy: r.created_by, ...(r.data || {})}]));
     S.bags = new Map(c.map(r => [r.id, {id: r.id, ...(r.data || {})}]));
@@ -1635,6 +1830,7 @@ async function refresh(){
     S.feed = b.filter(r => r.owner && r.owner !== me()).map(r => ({id: r.id, owner: r.owner, ...(r.data || {})}));
     sortBrews();
     S.machines = new Map(m.map(r => [r.id, {id: r.id, ...(r.data || {})}]));
+    S.pairs = pr;
     S.grinders = new Map(g.map(r => [r.id, {id: r.id, ...(r.data || {})}]));
     S.profiles = new Map(p.map(r => [r.id, r.name || ""]));
     S.isAdmin = a.some(r => r.user_id === me());
@@ -1766,7 +1962,7 @@ async function logout(){
   if (channel){ sb.removeChannel(channel); channel = null; }
   session = null; db = null;
   S.catalog = new Map(); S.bags = new Map(); S.brews = []; S.grinders = new Map(); S.profiles = new Map(); S.counts = new Map();
-  S.machines = new Map(); S.feed = []; S.communityFilter = null;
+  S.machines = new Map(); S.feed = []; S.communityFilter = null; S.pairs = [];
   S.isAdmin = false; S.loaded = false; S.needLogin = true;
   go(null);
 }

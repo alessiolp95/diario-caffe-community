@@ -88,6 +88,18 @@ insert into public.admins select id from auth.users where email = 'nome@esempio.
 delete from public.admins where user_id = (select id from auth.users where email = 'nome@esempio.it');
 ```
 
+## Doppioni nel catalogo
+
+- Quando si crea una scheda molto simile a una esistente (nome e torrefazione, anche scritta diversamente),
+  l'app mostra le due schede affiancate e chiede "È lo stesso caffè?": si può usare quella del catalogo o crearne una nuova.
+- Il campo torrefazione suggerisce quelle già presenti.
+- Ogni membro può usare "Segnala doppione" dalla scheda di un caffè.
+- Gli amministratori trovano in Impostazioni → Catalogo → "Possibili doppioni" le coppie segnalate e quelle trovate
+  automaticamente. Per ogni coppia vedono le differenze (con un avviso se processo, varietà, profilo o torrefazione
+  sono diversi), scelgono la scheda da tenere e uniscono: confezioni ed estrazioni di tutti passano alla scheda tenuta,
+  i suoi campi vuoti vengono completati con l'altra, che viene eliminata. Oppure segnano la coppia come "Non sono doppioni".
+- L'unione la fa il database (funzione `merge_catalog`, solo amministratori), in un'unica operazione.
+
 ## Backup
 
 Il piano gratuito di Supabase non fa copie automatiche. Ogni membro può usare "Esporta backup" in fondo alla libreria
