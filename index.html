@@ -244,6 +244,44 @@ textarea{min-height:110px;resize:vertical;line-height:1.45}
 .pill.pub{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
 .share-img{width:100%;border-radius:12px;border:1px solid var(--line);display:block}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* ruota degli aromi */
+.wheel-host{display:flex;flex-direction:column;gap:12px}
+.wheel-bar{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:0 4px;font-size:14px;min-width:0}
+.crumbs button{border:0;background:none;padding:6px 2px;color:var(--accent);font-weight:500;cursor:pointer}
+.crumbs span{color:var(--muted)}
+.crumbs b{font-weight:600;padding:6px 0}
+.seg.lang{flex:0 0 auto;flex-wrap:nowrap}
+.seg.lang button{flex:0 0 auto;min-width:44px}
+.wheel-box{width:100%;max-width:480px;margin:0 auto;aspect-ratio:1}
+svg.wheel{width:100%;height:100%;display:block;touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;overflow:visible;transform-origin:50% 50%}
+svg.wheel [role=button]{cursor:pointer;outline:none}
+svg.wheel path.a{stroke:var(--bg);stroke-width:1.3;stroke-linejoin:round}
+svg.wheel [role=button]:focus-visible path.a,svg.wheel [role=button]:focus-visible circle{stroke:var(--ink);stroke-width:2.5}
+svg.wheel text{pointer-events:none;font-family:var(--font-body);font-weight:500}
+svg.wheel .sel-bg{fill:none;stroke:var(--bg);stroke-width:6;stroke-linejoin:round;pointer-events:none}
+svg.wheel .sel{fill:none;stroke:var(--ink);stroke-width:2.6;stroke-linejoin:round;pointer-events:none}
+svg.wheel .dot{fill:var(--ink);stroke:var(--bg);stroke-width:1.5;pointer-events:none}
+svg.wheel .hub{fill:var(--surface);stroke:var(--line)}
+svg.wheel .hub-t{fill:var(--muted);pointer-events:none}
+.wheel-pick{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.wheel-pick .field{align-self:stretch}
+.aromas{display:flex;flex-wrap:wrap;gap:5px 6px}
+.aroma{display:inline-flex;align-items:center;gap:6px;font-size:13px;line-height:1.3;padding:3px 10px 3px 8px;border-radius:999px;background:var(--bg);border:1px solid var(--line);color:var(--ink)}
+.aroma i{width:10px;height:10px;border-radius:50%;flex:0 0 auto;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 22%,transparent)}
+.aroma button{border:0;background:none;padding:0 0 0 2px;margin:-4px -4px -4px 0;width:26px;height:26px;font-size:17px;line-height:1;color:var(--muted);cursor:pointer}
+.sheet .aroma,.wheel-pick .aroma{background:var(--surface)}
+.aromas.big .aroma{font-size:14px;padding:6px 12px 6px 10px;background:var(--surface);cursor:pointer}
+.linkcard{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;cursor:pointer;width:100%;text-align:left}
+.linkcard:hover{border-color:var(--muted)}
+.linkcard .t{display:flex;flex-direction:column;flex:1;min-width:0}
+.linkcard svg{flex:0 0 auto}
+@media (prefers-reduced-motion:no-preference){
+  svg.wheel.zin{animation:wzin .22s ease-out}
+  svg.wheel.zout{animation:wzout .22s ease-out}
+  @keyframes wzin{from{transform:scale(.8);opacity:.35}to{transform:none;opacity:1}}
+  @keyframes wzout{from{transform:scale(1.15);opacity:.35}to{transform:none;opacity:1}}
+}
 @media (prefers-reduced-motion:no-preference){
   .sheet{animation:up .18s ease-out}
   @keyframes up{from{transform:translateY(24px);opacity:.6}to{transform:none;opacity:1}}
@@ -489,6 +527,7 @@ function render(){
   }
   if (needsTerms()){ renderTermsGate(); return; }
   if (isCommunity()){ renderCommunity(); return; }
+  if (location.hash === "#ruota"){ renderAromaPage(); return; }
   const id = currentId();
   if (id && S.bags.has(id)) renderDetail(view(S.bags.get(id)));
   else renderLibrary();
@@ -545,7 +584,8 @@ function renderLibrary(){
     ? active.length + " caffè in dispensa · " + recent + (recent === 1 ? " estrazione" : " estrazioni") + " negli ultimi 30 giorni"
     : S.catalog.size + (S.catalog.size === 1 ? " caffè" : " caffè") + " nel catalogo della community";
   let html = navHtml("home") + '<header class="top"><div><h1>'+APP_TITLE+'</h1><p>'+summary+'</p>' + (S.offline ? '<p class="offline">Offline: vedi i dati dell\'ultima sincronizzazione. Le modifiche si salvano solo con la connessione.</p>' : "") + '</div>' +
-    '<button class="btn primary" data-act="new-coffee">+ Caffè</button></header>' + nudgesHtml(all.length);
+    '<button class="btn primary" data-act="new-coffee">+ Caffè</button></header>' + nudgesHtml(all.length) +
+    '<button class="linkcard" data-act="wheel">' + miniWheel() + '<span class="t"><b>Ruota degli aromi</b><span class="small muted">Consultala e ritrova gli aromi delle estrazioni</span></span><span class="muted" aria-hidden="true">›</span></button>';
   html += '<section class="list" aria-label="In dispensa">';
   if (!active.length){
     html += '<div class="empty"><p>' + (all.length ? "Nessun caffè in dispensa: tutti terminati." : "Cerca il caffè che hai comprato nel catalogo della community, oppure crea tu la scheda con la foto della confezione.") +
@@ -598,6 +638,7 @@ function brewInner(b){
   return '<div class="row"><span class="method">'+esc(brewTitle(b))+"</span>"+stars(b.rating)+"</div>" +
     '<div class="when">'+fmtWhen(b.at)+(age != null ? " · "+age+" gg dalla tostatura" : "")+"</div>" +
     (parts.length ? '<div class="params">'+parts.join("")+"</div>" : "") +
+    (b.aromas && b.aromas.length ? '<div class="aromas">'+sortAromas(b.aromas).map(a => aromaChip(a)).join("")+"</div>" : "") +
     (b.notes ? '<p class="notes">'+esc(b.notes)+"</p>" : "");
 }
 function brewCard(b){
@@ -739,6 +780,7 @@ app.addEventListener("click", e => {
   if (act === "home") go(null);
   else if (act === "community") goCommunity(null);
   else if (act === "info"){ location.hash = "info"; window.scrollTo(0, 0); }
+  else if (act === "wheel"){ location.hash = "ruota"; window.scrollTo(0, 0); }
   else if (act === "dup-entry" && bag) duplicateFlow(S.catalog.get(bag.catalogId));
   else if (act === "duplicates") duplicatesSheet();
   else if (act === "community-all") goCommunity(null);
@@ -764,15 +806,15 @@ async function toggleFinished(bag){
 }
 
 /* ---------- sheet generico ---------- */
-function openSheet(title, inner, cls){
+function openSheet(title, inner, cls, onClose){
   const ov = document.createElement("div");
   ov.className = "overlay" + (cls ? " " + cls : "");
   ov.innerHTML = '<div class="sheet" role="dialog" aria-modal="true" aria-label="'+esc(title)+'"><div class="sheet-head"><h2>'+esc(title)+'</h2><button class="btn ghost" data-close>Chiudi</button></div>'+inner+"</div>";
   document.body.appendChild(ov);
   document.body.style.overflow = "hidden";
-  const close = () => { ov.remove(); if (!document.querySelector(".overlay")) document.body.style.overflow = ""; };
+  const close = () => { ov.remove(); if (!document.querySelector(".overlay")) document.body.style.overflow = ""; if (onClose) onClose(); };
   ov.addEventListener("click", e => { if (e.target === ov || e.target.closest("[data-close]")) close(); });
-  ov.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+  ov.addEventListener("keydown", e => { if (e.key === "Escape"){ e.stopPropagation(); close(); } });
   return {el: ov, close};
 }
 function confirmBox(text, okLabel){
@@ -1395,6 +1437,7 @@ function brewSheet(coffee, b){
   let rating = b ? (b.rating || 0) : 0;
   let vals = b ? {...(b.params || {})} : methodDefaults(method);
   let bloomLinked = isNew;
+  const aromas = new Set(sortAromas(b?.aromas));
   const methodKeys = Object.keys(METHODS).concat(METHODS[method] ? [] : [method]);
 
   const inner = '<form id="bf" novalidate>' +
@@ -1409,9 +1452,10 @@ function brewSheet(coffee, b){
     '<p class="calc" id="bf-calc"></p>' +
     '<div class="prefill" id="bf-defs"></div>' +
     (coffee.tasting ? '<div class="declared"><span class="flabel">Note dichiarate in busta</span><p>'+esc(coffee.tasting)+'</p></div>' : "") +
+    '<div class="field" id="bf-aromi"><span class="flabel">Aromi percepiti</span><div class="aromas" id="bf-aromas"></div><button type="button" class="btn small" id="bf-wheel" style="align-self:flex-start"></button></div>' +
     '<div class="field"><span class="flabel">Voto</span><div class="rating" id="bf-rating">' + [1,2,3,4,5].map(i => '<button type="button" data-r="'+i+'" aria-label="'+i+' su 5">★</button>').join("") + "</div></div>" +
     '<div class="field"><label for="bf-notes">Risultato estrazione</label><textarea id="bf-notes" placeholder="Gusto, corpo, acidità, difetti, cosa cambiare la prossima volta…">'+esc(b?.notes||"")+"</textarea></div>" +
-    '<label class="check" for="bf-public"><input type="checkbox" id="bf-public"'+(b && b.public ? " checked" : "")+'><span class="t"><b>Condividi nella Community</b><span class="hint">Gli altri membri vedranno caffè, metodo, parametri, voto e note di questa estrazione.</span></span></label>' +
+    '<label class="check" for="bf-public"><input type="checkbox" id="bf-public"'+(b && b.public ? " checked" : "")+'><span class="t"><b>Condividi nella Community</b><span class="hint">Gli altri membri vedranno caffè, metodo, parametri, aromi, voto e note di questa estrazione.</span></span></label>' +
     '<div class="form-foot">' + (isNew ? "<span></span>" : '<button type="button" class="btn danger" id="bf-del">Elimina</button>') +
     '<button type="submit" class="btn primary" id="bf-save">'+(isNew?"Salva estrazione":"Salva modifiche")+"</button></div></form>";
   const s = openSheet(isNew ? "Nuova estrazione" : "Modifica estrazione", inner);
@@ -1542,6 +1586,15 @@ function brewSheet(coffee, b){
   paintRating();
   $("#bf-rating").addEventListener("click", e => { const r = e.target.closest("[data-r]"); if (!r) return; const n = Number(r.dataset.r); rating = rating === n ? 0 : n; paintRating(); });
 
+  function drawAromas(){
+    const list = sortAromas(aromas);
+    $("#bf-aromas").innerHTML = list.map(a => aromaChip(a, true)).join("");
+    $("#bf-aromas").hidden = !list.length;
+    $("#bf-wheel").textContent = list.length ? "Modifica con la ruota" : "Scegli dalla ruota degli aromi";
+  }
+  drawAromas();
+  $("#bf-wheel").addEventListener("click", () => aromaSheet(aromas, drawAromas));
+  $("#bf-aromas").addEventListener("click", e => { const r = e.target.closest("[data-rm]"); if (r){ aromas.delete(r.dataset.rm); drawAromas(); } });
   const sh = $("#bf-share");
   if (sh) sh.addEventListener("click", () => shareBrew(b, sh));
   const del = $("#bf-del");
@@ -1558,6 +1611,7 @@ function brewSheet(coffee, b){
     const data = {
       coffeeId: coffee.id, method, at: (isNaN(at) ? new Date() : at).toISOString(),
       params: readParams(), rating, notes: $("#bf-notes").value.trim(),
+      ...(aromas.size ? {aromas: sortAromas(aromas)} : {}),
       createdAt: b?.createdAt || new Date().toISOString(),
       /* per la Community: gli altri non vedono la confezione, quindi scheda e giorni dalla tostatura si salvano qui */
       catalogId: coffee.catalogId, public: $("#bf-public").checked,
@@ -1570,6 +1624,352 @@ function brewSheet(coffee, b){
       s.close(); toast(data.public ? (isNew ? "Estrazione salvata e condivisa nella Community" : "Modifiche salvate e condivise nella Community") : (isNew ? "Estrazione salvata" : "Modifiche salvate"));
     } catch(err){ btn.disabled = false; btn.textContent = isNew?"Salva estrazione":"Salva modifiche"; toast(errMsg(err)); }
   });
+}
+
+/* ---------- ruota degli aromi ----------
+   Gerarchia della Coffee Taster's Flavor Wheel (SCA e World Coffee Research, 2016),
+   in senso orario dall'alto. [chiave, inglese, italiano, colore, figli]
+   Gli aromi scelti si salvano nell'estrazione come percorsi: "fruity", "fruity.berry", "fruity.berry.raspberry". */
+const WHEEL_DATA = [
+  ["fruity","Fruity","Fruttato","#da1d23",[
+    ["berry","Berry","Frutti di bosco","#dd4c51",[
+      ["blackberry","Blackberry","Mora","#3e0317"],["raspberry","Raspberry","Lampone","#e62969"],
+      ["blueberry","Blueberry","Mirtillo","#6569b0"],["strawberry","Strawberry","Fragola","#ef2d36"]]],
+    ["dried-fruit","Dried fruit","Frutta essiccata","#c94a44",[
+      ["raisin","Raisin","Uvetta","#b53b54"],["prune","Prune","Prugna secca","#a5446f"]]],
+    ["other-fruit","Other fruit","Altra frutta","#f2684b",[
+      ["coconut","Coconut","Cocco","#d07c3c"],["cherry","Cherry","Ciliegia","#e73451"],["pomegranate","Pomegranate","Melograno","#e65656"],
+      ["pineapple","Pineapple","Ananas","#f89a1c"],["grape","Grape","Uva","#aeb92c"],["apple","Apple","Mela","#4eb849"],
+      ["peach","Peach","Pesca","#f68a5c"],["pear","Pear","Pera","#baa635"]]],
+    ["citrus-fruit","Citrus fruit","Agrumi","#f7a128",[
+      ["grapefruit","Grapefruit","Pompelmo","#f26355"],["orange","Orange","Arancia","#e2631e"],
+      ["lemon","Lemon","Limone","#fde404"],["lime","Lime","Lime","#7eb138"]]]]],
+  ["sour-fermented","Sour/Fermented","Acido/Fermentato","#ebb40f",[
+    ["sour","Sour","Acido","#e1c315",[
+      ["sour-aromatics","Sour aromatics","Aromi acidi","#9ea718"],["acetic-acid","Acetic acid","Acido acetico","#94a76f"],
+      ["butyric-acid","Butyric acid","Acido butirrico","#d0b24f"],["isovaleric-acid","Isovaleric acid","Acido isovalerico","#8eb646"],
+      ["citric-acid","Citric acid","Acido citrico","#faef07"],["malic-acid","Malic acid","Acido malico","#c1ba07"]]],
+    ["alcohol-fermented","Alcohol/Fermented","Alcolico/Fermentato","#b09733",[
+      ["winey","Winey","Vinoso","#8f1c53"],["whiskey","Whiskey","Whisky","#b34039"],
+      ["fermented","Fermented","Fermentato","#ba9232"],["overripe","Overripe","Stramaturo","#8b6439"]]]]],
+  ["green-vegetative","Green/Vegetative","Verde/Vegetale","#187a2f",[
+    ["olive-oil","Olive oil","Olio d'oliva","#a2b029"],
+    ["raw","Raw","Crudo","#718933"],
+    ["green-vegetative","Green/Vegetative","Verde/Vegetale","#3aa255",[
+      ["under-ripe","Under-ripe","Acerbo","#a2bb2b"],["peapod","Peapod","Baccello","#62aa3c"],["fresh","Fresh","Fresco","#03a653"],
+      ["dark-green","Dark green","Verde scuro","#038549"],["vegetative","Vegetative","Vegetale","#28b44b"],
+      ["hay-like","Hay-like","Fieno","#a3a830"],["herb-like","Herb-like","Erbe aromatiche","#7ac141"]]],
+    ["beany","Beany","Legumi","#5e9a80"]]],
+  ["other","Other","Altro","#0aa3b5",[
+    ["papery-musty","Papery/Musty","Cartaceo/Ammuffito","#9db2b7",[
+      ["stale","Stale","Stantio","#8b8c90"],["cardboard","Cardboard","Cartone","#beb276"],["papery","Papery","Cartaceo","#fefef4"],
+      ["woody","Woody","Legnoso","#744e03"],["moldy-damp","Moldy/Damp","Muffa/Umido","#a3a36f"],
+      ["musty-dusty","Musty/Dusty","Ammuffito/Polveroso","#c9b583"],["musty-earthy","Musty/Earthy","Ammuffito/Terroso","#978847"],
+      ["animalic","Animalic","Animale","#9d977f"],["meaty-brothy","Meaty/Brothy","Carne/Brodo","#cc7b6a"],["phenolic","Phenolic","Fenolico","#db646a"]]],
+    ["chemical","Chemical","Chimico","#76c0cb",[
+      ["bitter","Bitter","Amaro","#80a89d"],["salty","Salty","Salato","#def2fd"],["medicinal","Medicinal","Medicinale","#7a9bae"],
+      ["petroleum","Petroleum","Petrolio","#039fb8"],["skunky","Skunky","Moffetta","#5e777b"],["rubber","Rubber","Gomma","#120c0c"]]]]],
+  ["roasted","Roasted","Tostato","#c94930",[
+    ["pipe-tobacco","Pipe tobacco","Tabacco da pipa","#caa465"],
+    ["tobacco","Tobacco","Tabacco","#dfbd7e"],
+    ["burnt","Burnt","Bruciato","#be8663",[
+      ["acrid","Acrid","Acre","#b9a449"],["ashy","Ashy","Cenere","#899893"],
+      ["smoky","Smoky","Affumicato","#a1743b"],["brown-roast","Brown, Roast","Tostato scuro","#894810"]]],
+    ["cereal","Cereal","Cereali","#ddaf61",[
+      ["grain","Grain","Granaglie","#b7906f"],["malt","Malt","Malto","#eb9d5f"]]]]],
+  ["spices","Spices","Spezie","#ad213e",[
+    ["pungent","Pungent","Pungente","#794752"],
+    ["pepper","Pepper","Pepe","#cc3d41"],
+    ["brown-spice","Brown spice","Spezie scure","#b14d57",[
+      ["anise","Anise","Anice","#c78936"],["nutmeg","Nutmeg","Noce moscata","#8c292c"],
+      ["cinnamon","Cinnamon","Cannella","#e5762e"],["clove","Clove","Chiodi di garofano","#a16c5a"]]]]],
+  ["nutty-cocoa","Nutty/Cocoa","Frutta secca/Cacao","#a87b64",[
+    ["nutty","Nutty","Frutta secca","#c78869",[
+      ["peanuts","Peanuts","Arachidi","#d4ad12"],["hazelnut","Hazelnut","Nocciola","#9d5433"],["almond","Almond","Mandorla","#c89f83"]]],
+    ["cocoa","Cocoa","Cacao","#bb764c",[
+      ["chocolate","Chocolate","Cioccolato","#692a19"],["dark-chocolate","Dark chocolate","Cioccolato fondente","#470604"]]]]],
+  ["sweet","Sweet","Dolce","#e65832",[
+    ["brown-sugar","Brown sugar","Zucchero di canna","#d45a59",[
+      ["molasses","Molasses","Melassa","#310d0f"],["maple-syrup","Maple syrup","Sciroppo d'acero","#ae341f"],
+      ["caramelized","Caramelized","Caramellato","#d78823"],["honey","Honey","Miele","#da5c1f"]]],
+    ["vanilla","Vanilla","Vaniglia","#f89a80"],
+    ["vanillin","Vanillin","Vanillina","#f37674"],
+    ["overall-sweet","Overall sweet","Dolce generico","#e75b68"],
+    ["sweet-aromatics","Sweet Aromatics","Aromi dolci","#d0545f"]]],
+  ["floral","Floral","Floreale","#da0d68",[
+    ["black-tea","Black Tea","Tè nero","#975e6d"],
+    ["floral","Floral","Floreale","#e0719c",[
+      ["chamomile","Chamomile","Camomilla","#f99e1c"],["rose","Rose","Rosa","#ef5a78"],["jasmine","Jasmine","Gelsomino","#f7f1bd"]]]]],
+];
+const AROMA = new Map(), AROMA_ROOTS = [];
+(function buildWheel(list, parent){
+  for (const [key, en, it, color, kids] of list){
+    const n = {id: parent ? parent.id + "." + key : key, en, it, color, parent, depth: parent ? parent.depth + 1 : 1, children: [], order: AROMA.size};
+    AROMA.set(n.id, n); (parent ? parent.children : AROMA_ROOTS).push(n);
+    if (kids) buildWheel(kids, n);
+    n.units = n.children.length ? n.children.reduce((s, c) => s + c.units, 0) : 1;
+  }
+})(WHEEL_DATA, null);
+
+const LANG_KEY = "diario-aromi-lingua";
+let aromaLang = (() => { try { return localStorage.getItem(LANG_KEY) === "en" ? "en" : "it"; } catch { return "it"; } })();
+function setAromaLang(l){ aromaLang = l === "en" ? "en" : "it"; try { localStorage.setItem(LANG_KEY, aromaLang); } catch {} }
+const aromaName = id => { const n = AROMA.get(id); return n ? n[aromaLang] : String(id); };
+const aromaPath = id => { const out = []; for (let n = AROMA.get(id); n; n = n.parent) out.unshift(n[aromaLang]); return out.join(" › "); };
+const sortAromas = ids => [...new Set(ids || [])].filter(id => AROMA.has(id)).sort((a, b) => AROMA.get(a).order - AROMA.get(b).order);
+const inside = (id, anc) => id === anc || id.startsWith(anc + ".");
+function aromaChip(id, removable){
+  const n = AROMA.get(id); if (!n) return "";
+  return '<span class="aroma" title="'+esc(aromaPath(id))+'"><i style="background:'+n.color+'"></i>'+esc(n[aromaLang]) +
+    (removable ? '<button type="button" data-rm="'+esc(id)+'" aria-label="Togli '+esc(n[aromaLang])+'">×</button>' : "") + "</span>";
+}
+function langSwitch(){
+  return '<div class="seg small lang" role="radiogroup" aria-label="Lingua degli aromi">' +
+    ["it","en"].map(l => '<button type="button" role="radio" data-lang="'+l+'" aria-checked="'+(aromaLang === l)+'">'+l.toUpperCase()+"</button>").join("") + "</div>";
+}
+
+/* disegno: vista a fuoco su una categoria, al massimo due anelli intorno al centro */
+const LUM = hex => { const n = parseInt(hex.slice(1), 16); const c = [n >> 16 & 255, n >> 8 & 255, n & 255].map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126*c[0] + .7152*c[1] + .0722*c[2]; };
+const inkOn = hex => LUM(hex) > .2 ? "#1f1b18" : "#ffffff";
+let measureCtx = null;
+function textW(t, size, weight){
+  if (!measureCtx) measureCtx = document.createElement("canvas").getContext("2d");
+  measureCtx.font = (weight || 500) + " " + size + 'px "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif';
+  return measureCtx.measureText(t).width;
+}
+function splitTwo(t){
+  const out = [];
+  for (let i = 1; i < t.length - 1; i++){
+    if (t[i-1] === "/" ) out.push([t.slice(0, i), t.slice(i)]);
+    else if (t[i] === " ") out.push([t.slice(0, i), t.slice(i + 1)]);
+  }
+  return out;
+}
+/* sceglie dimensione, righe e orientamento (lungo l'arco o lungo il raggio) che entrano nello spicchio */
+function fitLabel(t, a0, a1, r0, r1, maxSize, weight){
+  const span = a1 - a0, rm = (r0 + r1) / 2, rad = r1 - r0 - 8;
+  const chord = r => span >= Math.PI ? 2 * r : 2 * r * Math.sin(span / 2);
+  const splits = splitTwo(t);
+  for (let size = maxSize; size >= 8; size -= 0.5){
+    const lh = size * 1.12;
+    const tries = [[t]];
+    if (splits.length){
+      const best = splits.map(s => [s, Math.max(textW(s[0], size, weight), textW(s[1], size, weight))]).sort((a, b) => a[1] - b[1])[0][0];
+      tries.push(best);
+    }
+    for (const lines of tries){
+      const n = lines.length, w = Math.max(...lines.map(l => textW(l, size, weight)));
+      const th = n * lh;
+      /* lungo l'arco: il bordo interno del testo deve stare nella corda, gli angoli esterni nell'anello */
+      if (th <= rad && w <= chord(rm - th / 2) - 6 && Math.hypot(rm + th / 2, w / 2) <= r1 - 3) return {size, lines, orient:"t", pos:rm};
+      /* lungo il raggio: centrato se c'è spazio, altrimenti spostato verso l'esterno dove lo spicchio è più largo */
+      if (w <= rad){
+        const need = span >= Math.PI ? 0 : (th + 1) / (2 * Math.sin(span / 2));
+        const rin = Math.max(rm - w / 2, need);
+        if (rin + w <= r1 - 4) return {size, lines, orient:"r", pos: rin + w / 2};
+      }
+    }
+  }
+  return null;
+}
+function arcPath(a0, a1, r0, r1){
+  const p = (r, a) => (r * Math.sin(a)).toFixed(2) + " " + (-r * Math.cos(a)).toFixed(2);
+  const large = a1 - a0 > Math.PI ? 1 : 0;
+  return "M" + p(r1, a0) + "A" + r1 + " " + r1 + " 0 " + large + " 1 " + p(r1, a1) +
+    "L" + p(r0, a1) + "A" + r0 + " " + r0 + " 0 " + large + " 0 " + p(r0, a0) + "Z";
+}
+function labelSvg(fit, am, fill, bold){
+  const deg = am * 180 / Math.PI;
+  let rot = fit.orient === "r" ? deg - 90 : deg;
+  if (fit.orient === "r" && am > Math.PI) rot += 180;
+  if (fit.orient === "t" && am > Math.PI / 2 && am < 3 * Math.PI / 2) rot += 180;
+  const x = fit.pos * Math.sin(am), y = -fit.pos * Math.cos(am), lh = fit.size * 1.12, n = fit.lines.length;
+  return '<text transform="translate('+x.toFixed(2)+" "+y.toFixed(2)+") rotate("+rot.toFixed(2)+')" font-size="'+fit.size+'" fill="'+fill+'"'+(bold ? ' font-weight="700"' : "")+' text-anchor="middle">' +
+    fit.lines.map((l, i) => '<tspan x="0" y="'+((i - (n - 1) / 2) * lh).toFixed(2)+'" dominant-baseline="central">'+esc(l)+"</tspan>").join("") + "</text>";
+}
+function wheelLayout(focus){
+  if (!focus) return {c:42, rings:[[42, 118], [118, 198]]};
+  if (focus.depth === 1) return {c:60, rings:[[60, 128], [128, 198]]};
+  return {c:72, rings:[[72, 198]]};
+}
+function wheelSvg(st){
+  const F = st.focus ? AROMA.get(st.focus) : null, L = wheelLayout(F);
+  const marked = id => st.selected ? st.selected.has(id) : st.info === id;
+  const markedInside = n => st.selected ? [...st.selected].some(id => id !== n.id && inside(id, n.id)) : !!(st.info && st.info !== n.id && inside(st.info, n.id));
+  const outer = L.rings[L.rings.length - 1][1];
+  let segs = "", marks = "";
+  const walk = (nodes, a0, a1, lvl) => {
+    const total = nodes.reduce((s, n) => s + n.units, 0);
+    let a = a0;
+    for (const n of nodes){
+      const b = a + (a1 - a0) * n.units / total, ring = L.rings[lvl];
+      const r0 = ring[0], r1 = n.children.length ? ring[1] : outer; /* gli aromi senza figli arrivano al bordo */
+      const on = marked(n.id), name = n[aromaLang];
+      const fit = fitLabel(name, a, b, r0, r1, L.rings.length === 1 ? 16 : lvl === 0 && !F ? 13 : 12, on ? 700 : 500);
+      segs += '<g data-id="'+esc(n.id)+'" role="button" tabindex="0" aria-label="'+esc(name + (n.children.length ? ", apri" : "") + (on ? ", selezionato" : ""))+'">' +
+        '<path class="a" d="'+arcPath(a, b, r0, r1)+'" fill="'+n.color+'"/>' +
+        (fit ? labelSvg(fit, (a + b) / 2, inkOn(n.color), on) : "") + "</g>";
+      if (on){ const d = arcPath(a + 1.6 / r0, b - 1.6 / r0, r0 + 2.2, r1 - 2.2); marks += '<path class="sel-bg" d="'+d+'"/><path class="sel" d="'+d+'"/>'; }
+      if (n.children.length){
+        if (L.rings[lvl + 1]) walk(n.children, a, b, lvl + 1);
+        else if (markedInside(n)){
+          const am = (a + b) / 2, rr = r1 - 7;
+          marks += '<circle class="dot" cx="'+(rr * Math.sin(am)).toFixed(2)+'" cy="'+(-rr * Math.cos(am)).toFixed(2)+'" r="3.6"/>';
+        }
+      }
+      a = b;
+    }
+  };
+  walk(F ? F.children : AROMA_ROOTS, 0, 2 * Math.PI, 0);
+  let center;
+  if (!F){
+    center = '<circle r="'+L.c+'" class="hub"/><text class="hub-t" font-size="11" text-anchor="middle" dominant-baseline="central">'+(aromaLang === "en" ? "Aromas" : "Aromi")+"</text>";
+  } else {
+    const on = !!st.selected && st.selected.has(F.id), name = (on ? "✓ " : "") + F[aromaLang], fill = inkOn(F.color), maxW = L.c * 1.62;
+    let fit = null;
+    for (let size = 14; size >= 8.5 && !fit; size -= 0.5){
+      const opts = [[name]].concat(splitTwo(name));
+      for (const lines of opts) if (Math.max(...lines.map(l => textW(l, size))) <= maxW && lines.length * size * 1.12 <= L.c){ fit = {size, lines}; break; }
+    }
+    fit = fit || {size: 8.5, lines: [name]};
+    const lh = fit.size * 1.12, n = fit.lines.length;
+    center = '<g data-role="center" role="button" tabindex="0" aria-label="Torna indietro da '+esc(F[aromaLang])+'">' +
+      '<circle r="'+L.c+'" fill="'+F.color+'"/>' +
+      '<text font-size="'+fit.size+'" fill="'+fill+'" text-anchor="middle">' +
+        fit.lines.map((l, i) => '<tspan x="0" y="'+((i - (n - 1) / 2) * lh - 6).toFixed(2)+'" dominant-baseline="central">'+esc(l)+"</tspan>").join("") + "</text>" +
+      '<text font-size="9.5" fill="'+fill+'" opacity=".85" text-anchor="middle" y="'+((n - 1) / 2 * lh + 10).toFixed(2)+'" dominant-baseline="central">‹ '+(aromaLang === "en" ? "back" : "indietro")+"</text></g>";
+    if (on) marks += '<circle class="sel-bg" r="'+(L.c - 2.5)+'"/><circle class="sel" r="'+(L.c - 2.5)+'"/>';
+  }
+  return '<svg class="wheel" viewBox="-200 -200 400 400" role="group" aria-label="Ruota degli aromi">'+segs+center+marks+"</svg>";
+}
+
+/* componente: modalità "select" (scegli gli aromi di un'estrazione) o "view" (consultazione) */
+function aromaWheel(host, o){
+  const st = o.state || {focus: null, info: null};
+  st.selected = o.selected || null;
+  host.classList.add("wheel-host");
+  host.innerHTML = '<div class="wheel-bar"><nav class="crumbs" aria-label="Percorso nella ruota"></nav>'+langSwitch()+'</div><div class="wheel-box"></div>' +
+    (o.mode === "select" ? '<div class="wheel-pick"></div>' : "");
+  const q = s => host.querySelector(s);
+  function crumbs(){
+    const path = []; for (let n = st.focus ? AROMA.get(st.focus) : null; n; n = n.parent) path.unshift(n);
+    const all = aromaLang === "en" ? "Whole wheel" : "Tutta la ruota";
+    return (path.length ? '<button type="button" data-crumb="">'+all+"</button>" : "<b>"+all+"</b>") +
+      path.map((n, i) => "<span>›</span>" + (i === path.length - 1 ? "<b>"+esc(n[aromaLang])+"</b>" : '<button type="button" data-crumb="'+esc(n.id)+'">'+esc(n[aromaLang])+"</button>")).join("");
+  }
+  function pick(){
+    const F = st.focus ? AROMA.get(st.focus) : null, sel = sortAromas(st.selected);
+    let h = "";
+    if (F){
+      const on = st.selected.has(F.id);
+      h += '<button type="button" class="btn small'+(on ? " primary" : "")+'" data-pickfocus aria-pressed="'+on+'">' +
+        (on ? "✓ «"+esc(F[aromaLang])+"» selezionato" : "Seleziona «"+esc(F[aromaLang])+"» in generale") + "</button>";
+    } else h += '<p class="hint">Tocca una categoria per aprirla, poi tocca gli aromi che senti. Se non riconosci quello specifico, apri la categoria e selezionala in generale.</p>';
+    h += '<div class="field"><span class="flabel">Selezionati' + (sel.length ? " ("+sel.length+")" : "") + "</span>" +
+      (sel.length ? '<div class="aromas">'+sel.map(id => aromaChip(id, true)).join("")+"</div>" : '<p class="hint">Nessun aroma selezionato.</p>') + "</div>";
+    return h;
+  }
+  function draw(anim){
+    q(".crumbs").innerHTML = crumbs();
+    host.querySelectorAll("[data-lang]").forEach(b => b.setAttribute("aria-checked", String(b.dataset.lang === aromaLang)));
+    q(".wheel-box").innerHTML = wheelSvg(st);
+    if (anim) q("svg.wheel").classList.add(anim === "in" ? "zin" : "zout");
+    if (o.mode === "select") q(".wheel-pick").innerHTML = pick();
+  }
+  function zoom(id){
+    const before = st.focus ? AROMA.get(st.focus).depth : 0, after = id ? AROMA.get(id).depth : 0;
+    st.focus = id || null;
+    if (o.mode === "view"){ st.info = st.focus; o.onInfo && o.onInfo(st.info); }
+    draw(after > before ? "in" : after < before ? "out" : null);
+  }
+  function toggle(id){
+    if (st.selected.has(id)) st.selected.delete(id); else st.selected.add(id);
+    draw(); o.onChange && o.onChange();
+  }
+  function act(el){
+    if (el.dataset.role === "center"){ const F = AROMA.get(st.focus); zoom(F && F.parent ? F.parent.id : null); return; }
+    const n = AROMA.get(el.dataset.id); if (!n) return;
+    if (n.children.length) zoom(n.id);
+    else if (o.mode === "select") toggle(n.id);
+    else { st.info = st.info === n.id ? st.focus : n.id; draw(); o.onInfo && o.onInfo(st.info); }
+  }
+  host.addEventListener("click", e => {
+    const t = e.target;
+    const seg = t.closest("svg.wheel [data-id], svg.wheel [data-role]"); if (seg){ act(seg); return; }
+    const cr = t.closest("[data-crumb]"); if (cr){ zoom(cr.dataset.crumb || null); return; }
+    const lg = t.closest("[data-lang]"); if (lg){ if (lg.dataset.lang !== aromaLang){ setAromaLang(lg.dataset.lang); draw(); o.onLang && o.onLang(); } return; }
+    const rm = t.closest("[data-rm]"); if (rm && st.selected){ toggle(rm.dataset.rm); return; }
+    if (t.closest("[data-pickfocus]") && st.focus) toggle(st.focus);
+  });
+  host.addEventListener("keydown", e => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const seg = e.target.closest && e.target.closest("svg.wheel [data-id], svg.wheel [data-role]");
+    if (!seg) return;
+    e.preventDefault();
+    const keep = seg.dataset.id || "";
+    act(seg);
+    const again = keep && host.querySelector('svg.wheel [data-id="'+CSS.escape(keep)+'"]');
+    (again || host.querySelector("svg.wheel [data-role], svg.wheel [data-id]"))?.focus();
+  });
+  draw();
+  if (document.fonts && document.fonts.status !== "loaded") document.fonts.ready.then(() => { if (host.isConnected) draw(); });
+  return {
+    draw,
+    show(id){ const n = AROMA.get(id); if (!n) return; st.focus = n.children.length ? n.id : (n.parent ? n.parent.id : null); st.info = id; draw("in"); o.onInfo && o.onInfo(st.info); },
+  };
+}
+
+/* scelta degli aromi dal modulo dell'estrazione */
+function aromaSheet(selected, onDone){
+  const s = openSheet("Ruota degli aromi", '<div id="aw"></div><div class="form-foot"><span></span><button type="button" class="btn primary" data-close>Fatto</button></div>', "wheel-sheet", onDone);
+  aromaWheel(s.el.querySelector("#aw"), {mode: "select", selected});
+  return s;
+}
+
+/* pagina di consultazione: le proprie estrazioni e quelle condivise dagli altri membri */
+const WHEEL_PAGE = {focus: null, info: null};
+function renderAromaPage(){
+  app.innerHTML = navHtml("aromi") + '<header><h1>Ruota degli aromi</h1><p class="muted small" style="margin:6px 0 0">Tocca una categoria per aprirla, tocca un aroma per vedere in quali estrazioni è stato trovato.</p></header>' +
+    '<section id="ar-wheel"></section><section id="ar-info" class="list" aria-live="polite"></section>' +
+    '<p class="hint">Basata sulla Coffee Taster\'s Flavor Wheel di SCA e World Coffee Research (2016). Traduzione italiana non ufficiale.</p>' + footerHtml();
+  const info = document.getElementById("ar-info");
+  const hasAromas = b => Array.isArray(b.aromas) && b.aromas.length;
+  const mine = S.brews.filter(hasAromas), others = S.feed.filter(hasAromas);
+  const myRow = b => {
+    const bag = S.bags.get(b.coffeeId), c = bag ? view(bag) : null, match = sortAromas(b.aromas.filter(a => inside(a, WHEEL_PAGE.info)));
+    return '<button class="brew" data-open="'+esc(b.coffeeId)+'"><div class="row"><span class="method">'+esc(c ? c.name : "Caffè eliminato")+"</span>"+stars(b.rating)+"</div>" +
+      '<div class="when">'+esc(brewTitle(b))+" · "+fmtWhen(b.at)+"</div>" +
+      '<div class="aromas">'+match.map(a => aromaChip(a)).join("")+"</div></button>";
+  };
+  function drawInfo(){
+    const id = WHEEL_PAGE.info;
+    if (!id){
+      const count = new Map();
+      for (const b of mine) for (const a of new Set(b.aromas)) if (AROMA.has(a)) count.set(a, (count.get(a) || 0) + 1);
+      const top = [...count].sort((x, y) => y[1] - x[1] || AROMA.get(x[0]).order - AROMA.get(y[0]).order).slice(0, 12);
+      info.innerHTML = '<h2>I tuoi aromi più frequenti</h2>' + (top.length
+        ? '<div class="aromas big">' + top.map(([a, n]) => '<button type="button" class="aroma" data-aroma="'+esc(a)+'"><i style="background:'+AROMA.get(a).color+'"></i>'+esc(aromaName(a))+' <span class="muted num">'+n+"</span></button>").join("") + "</div>"
+        : '<p class="hint">Quando scegli gli aromi in un\'estrazione, qui trovi quelli che senti più spesso.</p>');
+      return;
+    }
+    const n = AROMA.get(id);
+    const my = mine.filter(b => b.aromas.some(a => inside(a, id)));
+    const cm = others.filter(b => b.aromas.some(a => inside(a, id)));
+    let h = '<div><h2>'+esc(n[aromaLang])+'</h2>' + (n.depth > 1 ? '<p class="hint" style="margin-top:2px">'+esc(aromaPath(id))+"</p>" : "") + "</div>";
+    h += '<h3>Le tue estrazioni' + (my.length ? ' <span class="muted num">'+my.length+"</span>" : "") + "</h3>";
+    h += my.length ? my.map(myRow).join("") : '<p class="hint">Non l\'hai ancora indicato in nessuna estrazione.</p>';
+    if (cm.length) h += '<h3>Nella Community <span class="muted num">'+cm.length+'</span></h3>' + cm.map(communityCard).join("");
+    if (n.children.length && (my.length || cm.length)) h += '<p class="hint">Sono comprese le estrazioni con un aroma più specifico di questa categoria.</p>';
+    info.innerHTML = h;
+  }
+  const w = aromaWheel(document.getElementById("ar-wheel"), {mode: "view", state: WHEEL_PAGE, onInfo: drawInfo, onLang: drawInfo});
+  info.addEventListener("click", e => { const a = e.target.closest("[data-aroma]"); if (a) w.show(a.dataset.aroma); });
+  drawInfo();
+}
+function miniWheel(){
+  let a = 0, h = "";
+  for (const n of AROMA_ROOTS){ const b = a + 2 * Math.PI * n.units / 85; h += '<path d="'+arcPath(a, b, 5, 19)+'" fill="'+n.color+'"/>'; a = b; }
+  return '<svg width="40" height="40" viewBox="-20 -20 40 40" aria-hidden="true">'+h+"</svg>";
 }
 
 /* ---------- estrazione come immagine ---------- */
@@ -1682,6 +2082,23 @@ async function brewImage(b){
     y += rows * rowH + 24;
   }
   const footY = H - 70;
+  /* aromi percepiti: etichette colorate, al massimo nello spazio che resta sopra il piede */
+  const ar = sortAromas(b.aromas);
+  if (ar.length){
+    let ax = M, ay = y + 56;
+    x.font = "500 30px " + BODY; x.textBaseline = "middle";
+    x.fillStyle = C.muted; x.font = "500 24px " + BODY; x.fillText("AROMI", M, ay); ay += 50; x.font = "500 30px " + BODY;
+    for (const id of ar){
+      const n = AROMA.get(id), label = n[aromaLang], w = x.measureText(label).width + 76;
+      if (ax + w > W - M){ ax = M; ay += 66; }
+      if (ay > footY - 70) break;
+      x.fillStyle = C.card; roundRect(x, ax, ay - 26, w, 52, 26); x.fill(); x.strokeStyle = C.line; x.lineWidth = 2; x.stroke();
+      x.beginPath(); x.arc(ax + 30, ay, 10, 0, 2 * Math.PI); x.fillStyle = n.color; x.fill(); x.strokeStyle = "rgba(0,0,0,.18)"; x.lineWidth = 1.5; x.stroke();
+      x.fillStyle = C.ink; x.fillText(label, ax + 50, ay + 1);
+      ax += w + 12;
+    }
+    x.textBaseline = "alphabetic";
+  }
   /* piede */
   x.fillStyle = C.muted; x.font = "500 28px " + BODY;
   x.fillText("di " + (nick(isMineBrew(b) ? me() : b.owner) || "un membro della community"), M, footY);

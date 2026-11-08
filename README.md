@@ -8,6 +8,7 @@ Versione condivisa del Diario caffè per una piccola community di appassionati.
 - **Dati personali privati**: data di tostatura, peso, prezzo, macinini e macchine li vede solo chi li ha inseriti (dei macinini la community vede solo i modelli, in forma anonima, come modelli pronti);
   le estrazioni anche, salvo quelle che si sceglie di condividere nella Community.
 - **Macinini personalizzati**: marca, modello, macine (standard o un nome a scelta), valore minimo, massimo e step minimo. Nel modulo "Nuovo macinino" si può partire da un modello già usato da altri membri (funzione `grinder_presets` del database: restituisce solo marca, modello, macine, scala e quanti membri lo usano, mai chi).
+- **Ruota degli aromi**: pagina di consultazione (dalla libreria, indirizzo `#ruota`) e campo "Aromi percepiti" nel modulo estrazione, in italiano o in inglese, con scelta a ogni livello della Coffee Taster's Flavor Wheel (SCA/WCR). Gli aromi si salvano nell'estrazione (`aromas`), compaiono nella Community e nell'immagine da condividere.
 - **Predefiniti per metodo**: ognuno può salvare i propri valori di partenza (dose, resa/acqua, temperatura, macinino e macinatura…).
 - **Macchine espresso**: ognuno registra le proprie (marca facoltativa, modello) e le sceglie negli espressi.
 - **Community**: salvando un'estrazione si può spuntare "Condividi nella Community" (disattivato di default).

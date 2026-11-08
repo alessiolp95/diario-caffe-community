@@ -28,7 +28,7 @@ window.DIARIO_LEGAL = (() => {
 <ul>
 <li><b>Account</b>: l'indirizzo email con cui sei stato invitato e la password, che è gestita dal servizio di autenticazione in forma cifrata (nessuno può leggerla).</li>
 <li><b>Profilo</b>: il nickname che scegli.</li>
-<li><b>Contenuti che inserisci</b>: schede dei caffè del catalogo con le foto delle confezioni; confezioni nella tua dispensa (data di tostatura, peso, prezzo); estrazioni con parametri, voti e note; macinini, macchine espresso e valori predefiniti; data dell'ultimo backup e accettazione di queste condizioni.</li>
+<li><b>Contenuti che inserisci</b>: schede dei caffè del catalogo con le foto delle confezioni; confezioni nella tua dispensa (data di tostatura, peso, prezzo); estrazioni con parametri, aromi percepiti, voti e note; macinini, macchine espresso e valori predefiniti; data dell'ultimo backup e accettazione di queste condizioni.</li>
 <li><b>Dati tecnici</b>: come per ogni sito, i fornitori che ospitano l'app registrano nei loro log l'indirizzo IP e informazioni sul browser, per farla funzionare e proteggerla da abusi.</li>
 </ul>
 <p>Non raccogliamo dati di pagamento né categorie particolari di dati, e non usiamo pubblicità, statistiche di navigazione o strumenti di tracciamento.</p>
