@@ -244,6 +244,9 @@ textarea{min-height:110px;resize:vertical;line-height:1.45}
 .pill.pub{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
 .share-img{width:100%;border-radius:12px;border:1px solid var(--line);display:block}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.bc-body{display:flex;flex-direction:column;gap:14px}
+.bc-row{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);margin-top:6px}
+.bc-row select{width:100%}
 /* ruota degli aromi */
 .wheel-host{display:flex;flex-direction:column;gap:12px}
 .wheel-bar{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -2469,13 +2472,268 @@ async function photoFromData(photoData){
 }
 /* Importa un backup di questa app oppure della versione personale del Diario caffè
    (in quel caso ogni caffè diventa una scheda del catalogo + una confezione in dispensa). */
+/* ---------- importazione da Beanconqueror ----------
+   Esportazione: Beanconqueror.zip con Beanconqueror.json (+ Beanconqueror_Brews_1.json… oltre 500 elementi).
+   Le foto non sono incluse (Beanconqueror salva solo il percorso sul telefono). */
+/* zip minimale: file "stored" o "deflate" (DecompressionStream del browser) */
+async function readZip(buf){
+  const u8 = new Uint8Array(buf), dv = new DataView(buf);
+  let eocd = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
+  if (eocd < 0) throw new Error("zip");
+  const count = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const files = new Map(), dec = new TextDecoder();
+  for (let n = 0; n < count; n++){
+    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error("zip");
+    const method = dv.getUint16(p + 10, true), size = dv.getUint32(p + 20, true);
+    const nameLen = dv.getUint16(p + 28, true), extraLen = dv.getUint16(p + 30, true), commLen = dv.getUint16(p + 32, true);
+    const local = dv.getUint32(p + 42, true);
+    const name = dec.decode(u8.subarray(p + 46, p + 46 + nameLen));
+    files.set(name, async () => {
+      const start = local + 30 + dv.getUint16(local + 26, true) + dv.getUint16(local + 28, true);
+      const raw = u8.slice(start, start + size);
+      if (method === 0) return dec.decode(raw);
+      if (method !== 8 || typeof DecompressionStream === "undefined") throw new Error("zip-method");
+      return await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
+    });
+    p += 46 + nameLen + extraLen + commLen;
+  }
+  return files;
+}
+async function readBeanconqueror(file){
+  const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+  if (head[0] === 0x50 && head[1] === 0x4b){
+    const files = await readZip(await file.arrayBuffer());
+    const main = files.get("Beanconqueror.json"); if (!main) return null;
+    const data = JSON.parse(await main());
+    for (const [prop, part] of [["BREWS", "Brews"], ["BEANS", "Beans"]]){
+      for (let i = 1; files.has("Beanconqueror_" + part + "_" + i + ".json"); i++){
+        const chunk = JSON.parse(await files.get("Beanconqueror_" + part + "_" + i + ".json")());
+        if (Array.isArray(chunk)) data[prop] = (data[prop] || []).concat(chunk);
+      }
+    }
+    return data;
+  }
+  return null;
+}
+const isBeanconqueror = d => d && typeof d === "object" && Array.isArray(d.BEANS) && Array.isArray(d.BREWS);
+
+/* ruota di Beanconqueror (140 voci) → ruota SCA: [nome, aroma SCA, 1 = corrispondenza esatta] */
+const BC_FLAVORS = {"1":["Fruit","fruity",1],"2":["Citrus","fruity.citrus-fruit",1],"3":["Lemon & lemonade","fruity.citrus-fruit.lemon",1],"4":["Lime","fruity.citrus-fruit.lime",1],"5":["Grapefruit","fruity.citrus-fruit.grapefruit",1],"6":["Clementine","fruity.citrus-fruit",0],"7":["Tangerine","fruity.citrus-fruit",0],"8":["Mandarin orange","fruity.citrus-fruit",0],"9":["Orange","fruity.citrus-fruit.orange",1],"10":["Apple/pear","fruity.other-fruit",0],"11":["Green apple","fruity.other-fruit.apple",0],"12":["Red apple","fruity.other-fruit.apple",0],"13":["Melon","fruity.other-fruit",0],"14":["Watermelon","fruity.other-fruit",0],"15":["Honeydew","fruity.other-fruit",0],"16":["Cantaloupe","fruity.other-fruit",0],"17":["Grape","fruity.other-fruit.grape",1],"18":["White grape","fruity.other-fruit.grape",0],"19":["Green grape","fruity.other-fruit.grape",0],"20":["Red grape","fruity.other-fruit.grape",0],"21":["Concord grape","fruity.other-fruit.grape",0],"22":["Tropical fruit","fruity.other-fruit",0],"23":["Lychee","fruity.other-fruit",0],"24":["Star fruit","fruity.other-fruit",0],"25":["Tamarind","fruity.other-fruit",0],"26":["Passion fruit","fruity.other-fruit",0],"27":["Pineapple","fruity.other-fruit.pineapple",1],"28":["Mango","fruity.other-fruit",0],"29":["Papaya","fruity.other-fruit",0],"30":["Kiwi","fruity.other-fruit",0],"31":["Banana","fruity.other-fruit",0],"32":["Coconut","fruity.other-fruit.coconut",1],"33":["Stone fruit","fruity.other-fruit",0],"34":["Peach","fruity.other-fruit.peach",1],"35":["Nectarine","fruity.other-fruit.peach",0],"36":["Apricot","fruity.other-fruit",0],"37":["Plum","fruity.other-fruit",0],"38":["Cherry","fruity.other-fruit.cherry",1],"39":["Black cherry","fruity.other-fruit.cherry",0],"40":["Berry","fruity.berry",1],"41":["Cranberry","fruity.berry",0],"42":["Raspberry","fruity.berry.raspberry",1],"43":["Strawberry","fruity.berry.strawberry",1],"44":["Blueberry","fruity.berry.blueberry",1],"45":["Red currant","fruity.berry",0],"46":["Black currant","fruity.berry",0],"47":["Dried fruit","fruity.dried-fruit",1],"48":["Golden raisin","fruity.dried-fruit.raisin",0],"49":["Raisin","fruity.dried-fruit.raisin",1],"50":["Dried fig","fruity.dried-fruit",0],"51":["Dried dates","fruity.dried-fruit",0],"52":["Prune","fruity.dried-fruit.prune",1],"53":["Sweet & Roasting Notes","",0],"54":["Chocolate","nutty-cocoa.cocoa",0],"55":["Cacao nibs","nutty-cocoa.cocoa",0],"56":["Dark chocolate","nutty-cocoa.cocoa.dark-chocolate",1],"57":["Bakers chocolate","nutty-cocoa.cocoa.chocolate",0],"58":["Bittersweet chocolate","nutty-cocoa.cocoa.dark-chocolate",0],"59":["Cocoa powder","nutty-cocoa.cocoa",0],"60":["Milk chocolate","nutty-cocoa.cocoa.chocolate",0],"61":["Nut","nutty-cocoa.nutty",1],"62":["Walnut","nutty-cocoa.nutty",0],"63":["Peanut","nutty-cocoa.nutty.peanuts",1],"64":["Cashew","nutty-cocoa.nutty",0],"65":["Pecan","nutty-cocoa.nutty",0],"66":["Hazelnut","nutty-cocoa.nutty.hazelnut",1],"67":["Almond","nutty-cocoa.nutty.almond",1],"68":["Grain & Creal","roasted.cereal",1],"69":["Sweet bread pastery","roasted.cereal",0],"70":["Granola","roasted.cereal",0],"71":["Graham cracker","roasted.cereal",0],"72":["Rye","roasted.cereal.grain",0],"73":["Wheat","roasted.cereal.grain",0],"74":["Barley","roasted.cereal.grain",0],"75":["Fresh bread","roasted.cereal",0],"76":["Sweet & Sugary","sweet",1],"77":["Vanila","sweet.vanilla",1],"78":["Nougat","sweet",0],"79":["Honey","sweet.brown-sugar.honey",1],"80":["Butter","",0],"81":["Cream","",0],"82":["Marshallow","sweet",0],"83":["Sugar cane","sweet.brown-sugar",0],"84":["Brown sugar","sweet.brown-sugar",1],"85":["Caramel","sweet.brown-sugar.caramelized",0],"86":["Maple syrup","sweet.brown-sugar.maple-syrup",1],"87":["Molasses","sweet.brown-sugar.molasses",1],"88":["Cola","sweet",0],"89":["Roast","roasted",1],"90":["Toast","roasted",0],"91":["Burnt sugar","roasted.burnt",0],"92":["Smokey","roasted.burnt.smoky",1],"93":["Carbon","roasted.burnt",0],"94":["Vegetal, Savory & Spices","",0],"95":["Spice","spices",1],"96":["Black pepper","spices.pepper",0],"97":["White pepper","spices.pepper",0],"98":["Cinnamon","spices.brown-spice.cinnamon",1],"99":["Coriander","spices",0],"100":["Ginger","spices",0],"101":["Nutmeg","spices.brown-spice.nutmeg",1],"102":["Curry","spices",0],"103":["Licorice-anise","spices.brown-spice.anise",0],"104":["Clove","spices.brown-spice.clove",1],"105":["Savory","",0],"106":["Leathery","",0],"107":["Meat-like","other.papery-musty.meaty-brothy",0],"108":["Soy sauce","",0],"109":["Sundried tomato","",0],"110":["Tomato","",0],"111":["Vegetal Earthy Herb","green-vegetative",0],"112":["Soil","other.papery-musty.musty-earthy",0],"113":["Fresh wood","other.papery-musty.woody",0],"114":["Cedar","other.papery-musty.woody",0],"115":["Tobacco","roasted.tobacco",1],"116":["Hay / straw","green-vegetative.green-vegetative.hay-like",0],"117":["Leafy greens","green-vegetative.green-vegetative.vegetative",0],"118":["Olive","green-vegetative",0],"119":["Green pepper","green-vegetative.green-vegetative.vegetative",0],"120":["Squash","green-vegetative.green-vegetative.vegetative",0],"121":["Mushroom","other.papery-musty.musty-earthy",0],"122":["Sweet pea","green-vegetative.green-vegetative.peapod",0],"123":["Snow pea","green-vegetative.green-vegetative.peapod",0],"124":["Grassy","green-vegetative.green-vegetative",0],"125":["Dill","green-vegetative.green-vegetative.herb-like",0],"126":["Sage","green-vegetative.green-vegetative.herb-like",0],"127":["Mint","green-vegetative.green-vegetative.herb-like",0],"128":["Green tea","green-vegetative",0],"129":["Black tea","floral.black-tea",1],"130":["Hops","green-vegetative.green-vegetative.herb-like",0],"131":["Bergamot","fruity.citrus-fruit",0],"132":["Flowery","floral",1],"133":["Floral","floral.floral",1],"134":["Hibiscus","floral.floral",0],"135":["Rose hips","floral.floral.rose",0],"136":["Lavender","floral.floral",0],"137":["Magnolia","floral.floral",0],"138":["Jasmine honeysuckle","floral.floral.jasmine",0],"139":["Orange blossom","floral.floral",0],"140":["Lemongrass","green-vegetative.green-vegetative.herb-like",0]};
+/* metodo di preparazione Beanconqueror → metodo del diario */
+const BC_TYPES = {
+  V60:"filtro", ORIGAMI:"filtro", KALITA_WAVE:"filtro", OREA:"filtro", CHEMEX:"filtro", DRIPPER:"filtro", BLUE_DRIPPER:"filtro", KONO:"filtro",
+  APRIL_BREWER:"filtro", CAFEC_FLOWER:"filtro", HSIAO_50:"filtro", ESPRO_BLOOM:"filtro", GINA:"filtro", MOCCA_MASTER:"filtro", FELLOW_STAGG:"filtro",
+  AEROPRESS:"aeropress", AEROPRESS_INVERTED:"aeropress", DELTER_PRESS:"aeropress",
+  BIALETTI:"moka", FRENCH_PRESS:"frenchpress",
+  PORTAFILTER:"espressoClassico", METICULOUS:"espressoClassico", SANREMO_YOU:"espressoClassico", XENIA:"espressoClassico", GAGGIMATE:"espressoClassico",
+  GAGGIUINO:"espressoClassico", HAND_LEVER:"espressoClassico", FLAIR:"espressoClassico", CAFELAT:"espressoClassico",
+};
+const BC_DRIPPERS = {V60:"V60", ORIGAMI:"Origami", KALITA_WAVE:"Kalita", OREA:"Orea"};
+const bcMethodGuess = p => BC_TYPES[p.type] || (p.style_type === "ESPRESSO" ? "espressoClassico" : p.style_type === "POUR OVER" ? "filtro" : "");
+const bcId = x => x && x.config && x.config.uuid ? String(x.config.uuid) : "";
+const bcNum = v => { const n = typeof v === "number" ? v : parseFloat(String(v ?? "").replace(",", ".")); return isFinite(n) && n > 0 ? n : null; };
+const bcDate = x => { const t = x && x.config && x.config.unix_timestamp; return t ? new Date(t * 1000) : null; };
+function bcLocalDay(iso){ const d = new Date(iso); if (isNaN(d)) return ""; const p = n => String(n).padStart(2, "0"); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); }
+const fmtSec = s => s >= 60 ? Math.floor(s / 60) + ":" + String(Math.round(s % 60)).padStart(2, "0") + " min" : fmtNum(Math.round(s * 10) / 10) + " s";
+function bcFlavors(f){
+  const ids = !f || !f.predefined_flavors ? [] : Array.isArray(f.predefined_flavors) ? f.predefined_flavors : Object.keys(f.predefined_flavors).filter(k => f.predefined_flavors[k]);
+  const aromas = new Set(), words = [];
+  for (const id of ids){
+    const e = BC_FLAVORS[id]; if (!e) continue;
+    if (e[1] && AROMA.has(e[1])) aromas.add(e[1]);
+    if (!e[2]) words.push(e[0]);
+  }
+  for (const c of (f && f.custom_flavors) || []) if (c && String(c).trim()) words.push(String(c).trim());
+  return {aromas: sortAromas(aromas), words};
+}
+
+function beanconquerorSheet(data){
+  const beans = data.BEANS.filter(b => bcId(b) && b.name);
+  const beanIds = new Set(beans.map(bcId));
+  const brews = data.BREWS.filter(b => bcId(b) && beanIds.has(String(b.bean)));
+  const mills = new Map((data.MILL || []).filter(bcId).map(m => [bcId(m), m]));
+  const preps = new Map((data.PREPARATION || []).filter(bcId).map(p => [bcId(p), p]));
+  const usedMills = [...new Set(brews.filter(b => bcNum(b.grind_size) != null && mills.has(String(b.mill))).map(b => String(b.mill)))].map(id => mills.get(id));
+  const usedPreps = [...new Set(brews.map(b => String(b.method_of_preparation)).filter(id => preps.has(id)))].map(id => preps.get(id));
+  const settings = (data.SETTINGS || [])[0] || {};
+  const maxRating = bcNum(settings.brew_rating) || 5;
+  const done = brews.filter(b => S.brews.some(x => x.id === "bc-" + bcId(b))).length;
+  const flavorCount = brews.filter(b => bcFlavors(b.cupped_flavor).aromas.length).length;
+  if (!beans.length){ toast("Nel file di Beanconqueror non ci sono caffè da importare."); return; }
+
+  /* abbinamenti proposti */
+  const presetsAll = grinderPresets();
+  const millChoice = new Map();
+  for (const m of usedMills){
+    const own = [...S.grinders.values()].map(g => ["g:" + g.id, nameScore(m.name, [g.brand, g.model, g.burrs].join(" "))]);
+    const pre = presetsAll.map((t, i) => ["p:" + i, nameScore(m.name, [t.brand, t.model, t.burrs === "Standard" ? "" : t.burrs].join(" "))]);
+    const best = [...own, ...pre].filter(x => x[1] >= 0.5).sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0];
+    millChoice.set(bcId(m), best ? best[0] : "");
+  }
+  const beanChoice = new Map();
+  for (const b of beans){
+    const sim = likelyDuplicates({name: b.name, roaster: b.roaster || ""});
+    beanChoice.set(bcId(b), sim[0] ? "k:" + sim[0].id : "new");
+  }
+  const prepChoice = new Map(usedPreps.map(p => [bcId(p), bcMethodGuess(p) || "keep"]));
+
+  const millOptions = sel => '<option value="">Nessuno: la macinatura va nelle note</option>' +
+    (S.grinders.size ? '<optgroup label="I tuoi macinini">' + [...S.grinders.values()].map(g => '<option value="g:'+esc(g.id)+'"'+(sel === "g:" + g.id ? " selected" : "")+'>'+esc(grinderLabel(g))+"</option>").join("") + "</optgroup>" : "") +
+    '<optgroup label="Crea dai modelli">' + presetsAll.map((t, i) => '<option value="p:'+i+'"'+(sel === "p:" + i ? " selected" : "")+'>'+esc(grinderLabel(t) + " · " + fmtNum(t.min) + "–" + fmtNum(t.max) + ", step " + fmtNum(t.step))+"</option>").join("") + "</optgroup>";
+  const draw = () => {
+    let h = '<p style="margin:0">Trovati <b>' + beans.length + (beans.length === 1 ? " caffè" : " caffè") + "</b> e <b>" + brews.length + (brews.length === 1 ? " estrazione" : " estrazioni") + "</b>" +
+      (done ? " (" + done + " già importate: non vengono toccate)" : "") + ".</p>" +
+      '<p class="hint">Le foto non sono incluse nell\'esportazione di Beanconqueror: puoi aggiungerle dopo dalla scheda del caffè.</p>';
+    h += '<div class="field"><span class="flabel">Caffè</span>' + beans.map(b => {
+      const id = bcId(b), sim = likelyDuplicates({name: b.name, roaster: b.roaster || ""}).slice(0, 3), had = S.bags.has("bc-" + id);
+      return '<div class="bc-row"><b>'+esc(b.name)+"</b>" + (b.roaster ? '<span class="small muted">'+esc(b.roaster)+"</span>" : "") +
+        (had ? '<span class="hint">Già importato.</span>' :
+        '<select data-bean="'+esc(id)+'" aria-label="Scheda per '+esc(b.name)+'"><option value="new">Crea una nuova scheda nel catalogo</option>' +
+        sim.map(k => '<option value="k:'+esc(k.id)+'"'+(beanChoice.get(id) === "k:" + k.id ? " selected" : "")+'>Usa la scheda «'+esc(k.name + (k.roaster ? " · " + k.roaster : ""))+"»</option>").join("") + "</select>") + "</div>";
+    }).join("") + "</div>";
+    if (usedPreps.length) h += '<div class="field"><span class="flabel">Metodi</span>' + usedPreps.map(p => {
+      const id = bcId(p), sel = prepChoice.get(id);
+      return '<div class="bc-row"><b>'+esc(p.name || p.type)+'</b><select data-prep="'+esc(id)+'" aria-label="Metodo per '+esc(p.name || p.type)+'">' +
+        Object.keys(METHODS).map(k => '<option value="'+k+'"'+(sel === k ? " selected" : "")+">"+esc(METHODS[k].label)+"</option>").join("") +
+        '<option value="keep"'+(sel === "keep" ? " selected" : "")+'>Tienilo come «'+esc(p.name || p.type)+'» (metodo a sé)</option></select></div>';
+    }).join("") + "</div>";
+    if (usedMills.length) h += '<div class="field"><span class="flabel">Macinini</span>' + usedMills.map(m => {
+      const id = bcId(m);
+      return '<div class="bc-row"><b>'+esc(m.name)+'</b><select data-mill="'+esc(id)+'" aria-label="Macinino per '+esc(m.name)+'">'+millOptions(millChoice.get(id))+'</select>' +
+        '<button type="button" class="btn small" data-newmill="'+esc(id)+'" style="align-self:flex-start">+ Nuovo macinino</button></div>';
+    }).join("") + '<p class="hint">Beanconqueror non salva la scala del macinino: scegli il tuo o un modello, così la macinatura resta confrontabile.</p></div>';
+    if (flavorCount) h += '<p class="hint">Gli aromi scelti in Beanconqueror passano sulla ruota SCA; quelli senza un equivalente preciso vanno anche nelle note.</p>';
+    h += '<p class="hint">Le nuove schede del catalogo le vedono tutti i membri; confezioni ed estrazioni restano private.</p>';
+    s.el.querySelector("#bc-body").innerHTML = h;
+  };
+  const s = openSheet("Importa da Beanconqueror", '<div id="bc-body" class="bc-body"></div><div class="form-foot"><button type="button" class="btn" data-close>Annulla</button><button type="button" class="btn primary" id="bc-go">Importa</button></div>', "bc-sheet");
+  draw();
+  s.el.addEventListener("change", e => {
+    const t = e.target;
+    if (t.dataset.bean) beanChoice.set(t.dataset.bean, t.value);
+    if (t.dataset.prep) prepChoice.set(t.dataset.prep, t.value);
+    if (t.dataset.mill != null && t.dataset.mill !== "") millChoice.set(t.dataset.mill, t.value);
+  });
+  s.el.addEventListener("click", e => {
+    const nb = e.target.closest("[data-newmill]"); if (!nb) return;
+    grinderSheet(null, g => { if (g){ millChoice.set(nb.dataset.newmill, "g:" + g.id); draw(); } });
+  });
+  s.el.querySelector("#bc-go").addEventListener("click", async () => {
+    const btn = s.el.querySelector("#bc-go");
+    await withBusy(btn, "Importo…", async () => {
+      try {
+        const now = new Date().toISOString();
+        const grinderRows = [], catalogRows = [], bagRows = [], brewRows = [];
+        /* macinini: i propri o nuovi dai modelli (uno solo per modello) */
+        const fromPreset = new Map(), millGrinder = new Map();
+        for (const m of usedMills){
+          const c = millChoice.get(bcId(m)) || "";
+          if (c.startsWith("g:") && S.grinders.has(c.slice(2))) millGrinder.set(bcId(m), S.grinders.get(c.slice(2)));
+          else if (c.startsWith("p:")){
+            if (!fromPreset.has(c)){
+              const t = presetsAll[Number(c.slice(2))], id = uid("g");
+              const g = {id, brand: t.brand || "", model: t.model, burrs: t.burrs || "Standard", min: t.min, max: t.max, step: t.step, createdAt: now};
+              const {id: _x, ...rest} = g; grinderRows.push({id, data: rest, updated_at: now}); fromPreset.set(c, g);
+            }
+            millGrinder.set(bcId(m), fromPreset.get(c));
+          }
+        }
+        /* caffè: scheda (nuova o esistente) + confezione */
+        const bagOf = new Map(), bagData = new Map();
+        for (const b of beans){
+          const id = bcId(b), bagId = "bc-" + id;
+          if (S.bags.has(bagId)){ bagOf.set(id, bagId); bagData.set(bagId, S.bags.get(bagId)); continue; }
+          const c = beanChoice.get(id) || "new";
+          let kid = c.startsWith("k:") && S.catalog.has(c.slice(2)) ? c.slice(2) : null;
+          if (!kid){
+            kid = "kbc-" + id;
+            const info = (b.bean_information || []).filter(x => x && typeof x === "object");
+            const join = (key, sep) => [...new Set(info.map(x => String(x[key] || "").trim()).filter(Boolean))].join(sep);
+            const origin = [...new Set(info.map(x => [x.country, x.region].map(v => String(v || "").trim()).filter(Boolean).join(", ")).filter(Boolean))].join(" / ");
+            const profile = {FILTER:"Filtro", ESPRESSO:"Espresso", OMNI:"Omni"}[b.bean_roasting_type] || "";
+            const k = {name: String(b.name).trim(), roaster: String(b.roaster || "").trim(), origin, variety: join("variety", " / "), process: join("processing", " / "), profile, tasting: String(b.aromatics || "").trim(), photo: null, createdAt: now};
+            if (!S.catalog.has(kid)) catalogRows.push({id: kid, data: k, updated_at: now});
+          }
+          const created = b.buyDate ? new Date(b.buyDate) : bcDate(b);
+          const bag = {catalogId: kid, roastDate: b.roastingDate ? bcLocalDay(b.roastingDate) : "", weight: bcNum(b.weight), price: bcNum(b.cost),
+            finished: !!b.finished, finishedAt: b.finished ? now : null, createdAt: created && !isNaN(created) ? created.toISOString() : now};
+          bagRows.push({id: bagId, catalog_id: kid, data: bag, updated_at: now});
+          bagOf.set(id, bagId); bagData.set(bagId, bag);
+        }
+        /* estrazioni */
+        let skipped = 0;
+        for (const b of brews){
+          const id = "bc-" + bcId(b);
+          if (S.brews.some(x => x.id === id)){ skipped++; continue; }
+          const bagId = bagOf.get(String(b.bean)), bag = bagData.get(bagId); if (!bag) continue;
+          const prep = preps.get(String(b.method_of_preparation));
+          const choice = prep ? (prepChoice.get(bcId(prep)) || "keep") : "keep";
+          const method = choice === "keep" ? String(prep ? (prep.name || prep.type) : "Beanconqueror") : choice;
+          const fields = METHODS[method] ? METHODS[method].fields : null;
+          const espresso = /^espresso/.test(method);
+          const p = {}, extra = [];
+          const put = (k, v, label) => { if (v == null) return; if (!fields || fields.includes(k)) p[k] = v; else extra.push(label); };
+          const dose = bcNum(b.grind_weight), water = bcNum(b.brew_quantity), out = bcNum(b.brew_beverage_quantity);
+          const temp = bcNum(b.brew_temperature), time = bcNum((b.brew_time || 0) + (b.brew_time_milliseconds || 0) / 1000), bloom = bcNum(b.coffee_blooming_time);
+          put("dose", dose, "Dose: " + fmtNum(dose) + " g");
+          if (espresso){ put("yield", out || water, "Resa: " + fmtNum(out || water) + " g"); }
+          else {
+            put("water", water, "Acqua: " + fmtNum(water) + " g");
+            if (out) extra.push("Bevanda: " + fmtNum(out) + " g");
+          }
+          put("temp", temp, "Temperatura: " + fmtNum(temp) + " °C");
+          put(method === "frenchpress" ? "steep" : "time", time, "Tempo: " + fmtSec(time));
+          put("bloomTime", bloom, "Bloom: " + fmtSec(bloom));
+          if (method === "filtro" && prep && BC_DRIPPERS[prep.type]) p.dripper = BC_DRIPPERS[prep.type];
+          else if (prep && prep.name && METHODS[method] && norm(prep.name) !== norm(METHODS[method].label)) p.device = prep.name;
+          const grind = bcNum(b.grind_size), mill = mills.get(String(b.mill)), g = millGrinder.get(String(b.mill));
+          if (grind != null && g){ p.grind = grind; p.grinder = g.id; p.grinderLabel = grinderLabel(g); }
+          else if (String(b.grind_size || "").trim()) extra.push("Macinatura: " + String(b.grind_size).trim() + (mill && mill.name ? " (" + mill.name + ")" : ""));
+          if (bcNum(b.tds)) extra.push("TDS: " + fmtNum(bcNum(b.tds)) + " %");
+          if (bcNum(b.coffee_first_drip_time)) extra.push("Prima goccia: " + fmtSec(bcNum(b.coffee_first_drip_time)));
+          if (String(b.pressure_profile || "").trim()) extra.push("Profilo di pressione: " + String(b.pressure_profile).trim());
+          const fl = bcFlavors(b.cupped_flavor);
+          if (fl.words.length) extra.push("Aromi (Beanconqueror): " + fl.words.join(", "));
+          const at = bcDate(b) || new Date();
+          const r = bcNum(b.rating);
+          const age = bag.roastDate ? daysBetween(bag.roastDate, at.toISOString()) : null;
+          const data = {
+            coffeeId: bagId, method, at: at.toISOString(), params: p,
+            rating: r ? Math.min(5, Math.max(1, Math.round(r / maxRating * 5))) : 0,
+            notes: [String(b.note || "").trim(), ...extra].filter(Boolean).join("\n"),
+            ...(fl.aromas.length ? {aromas: fl.aromas} : {}),
+            createdAt: at.toISOString(), catalogId: bag.catalogId, public: false,
+            roastDays: age != null && age >= 0 ? age : null,
+          };
+          brewRows.push({id, coffee_id: bagId, is_public: false, data, updated_at: now});
+        }
+        const putRows = async (table, rows) => { for (let i = 0; i < rows.length; i += 200){ const {error} = await sb.from(table).upsert(rows.slice(i, i + 200)); if (error) throw wrapErr(error); } };
+        await putRows("grinders", grinderRows);
+        await putRows("catalog", catalogRows);
+        await putRows("coffees", bagRows);
+        await putRows("brews", brewRows);
+        await refresh(); loadPresets();
+        s.close();
+        toast("Importati da Beanconqueror: " + bagRows.length + " caffè (" + catalogRows.length + (catalogRows.length === 1 ? " nuova scheda" : " nuove schede") + ") e " + brewRows.length + (brewRows.length === 1 ? " estrazione" : " estrazioni") + (skipped ? " · " + skipped + " già presenti" : ""));
+      } catch(e){ toast(errMsg(e)); }
+    });
+  });
+}
+
 function importBackup(){
   const inp = document.createElement("input");
-  inp.type = "file"; inp.accept = ".json,application/json";
+  inp.type = "file"; inp.accept = ".json,.zip,application/json,application/zip";
   inp.addEventListener("change", async () => {
     const f = inp.files && inp.files[0]; if (!f) return;
     let data;
-    try { data = JSON.parse(await f.text()); } catch { toast("Il file non è un backup valido."); return; }
+    try { data = await readBeanconqueror(f); }
+    catch(e){ toast(String(e && e.message) === "zip-method" ? "Questo browser non riesce ad aprire il file .zip: aggiorna il browser o estrai Beanconqueror.json e importa quello." : "Non riesco ad aprire il file .zip."); return; }
+    if (!data){
+      try { data = JSON.parse(await f.text()); } catch { toast("Il file non è un backup valido."); return; }
+    }
+    if (isBeanconqueror(data)){ beanconquerorSheet(data); return; }
     const community = data && data.app === "diario-caffe-community", legacy = data && data.app === "diario-caffe";
     if ((!community && !legacy) || !Array.isArray(data.coffees) || !Array.isArray(data.brews)){ toast("Il file non è un backup del Diario caffè."); return; }
     const msg = legacy

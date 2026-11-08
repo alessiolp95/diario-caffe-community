@@ -105,6 +105,10 @@ delete from public.admins where user_id = (select id from auth.users where email
 
 Il piano gratuito di Supabase non fa copie automatiche. Ogni membro può usare "Esporta backup" in fondo alla libreria
 (file con le sue confezioni, le schede del catalogo collegate con le foto, le estrazioni e i macinini) e "Importa backup".
+"Importa backup" accetta anche l'esportazione di Beanconqueror (Impostazioni → Esporta, file `Beanconqueror.zip` o `Beanconqueror.json`):
+una schermata propone gli abbinamenti (scheda del catalogo nuova o esistente, metodo, macinino) prima di importare.
+Le foto non sono incluse nell'esportazione di Beanconqueror; gli aromi passano sulla ruota SCA, quelli senza equivalente vanno nelle note,
+e reimportare lo stesso file non crea doppioni.
 "Importa backup" accetta anche i backup della versione personale del Diario caffè: ogni caffè diventa una scheda del catalogo
 (o viene collegato a una scheda già presente con lo stesso nome e torrefazione) più una confezione in dispensa,
 e i macinini Pietro e Hibrew G5 vengono creati in automatico.
