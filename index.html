@@ -1660,17 +1660,7 @@ async function brewImage(b){
     });
     y += rows * rowH + 24;
   }
-  /* note */
   const footY = H - 70;
-  if (b.notes){
-    y += 64;
-    x.font = "italic 400 36px " + BODY; x.fillStyle = C.ink;
-    const maxLines = Math.max(1, Math.floor((footY - 80 - y) / 50) + 1);
-    const lines = wrapLines(x, b.notes, W - 2 * M - 30, maxLines);
-    x.fillStyle = C.accent; x.fillRect(M, y - 34, 6, lines.length * 50 - 4);
-    x.fillStyle = C.ink;
-    lines.forEach((l, i) => x.fillText(l, M + 30, y + i * 50));
-  }
   /* piede */
   x.fillStyle = C.muted; x.font = "500 28px " + BODY;
   x.fillText("di " + (nick(isMineBrew(b) ? me() : b.owner) || "un membro della community"), M, footY);
